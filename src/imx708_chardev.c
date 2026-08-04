@@ -44,17 +44,17 @@
 #include "imx708_uapi.h"
 #include "imx708_regs.h"
 
-#define DRV_NAME	"imx708"
+#define DRV_NAME "imx708"
 
 /* Module-level globals for char device (one class, one region for all instances) */
-dev_t		imx708_devt;
-struct class	*imx708_class;
-#define IMX708_MAX_DEVICES	4
+dev_t imx708_devt;
+struct class *imx708_class;
+#define IMX708_MAX_DEVICES 4
 
 void imx708_dev_release(struct kref *kref)
 {
 	struct imx708_dev *sensor = container_of(kref, struct imx708_dev,
-						 refcount);
+											 refcount);
 
 	mutex_destroy(&sensor->lock);
 	kfree(sensor);
@@ -105,7 +105,8 @@ static int imx708_ioctl_get_hw(struct imx708_dev *sensor)
 	if (ret < 0)
 		return ret;
 
-	if (READ_ONCE(sensor->removed)) {
+	if (READ_ONCE(sensor->removed))
+	{
 		pm_runtime_put(sensor->dev);
 		return -ENODEV;
 	}
@@ -120,7 +121,7 @@ static void imx708_ioctl_put_hw(struct imx708_dev *sensor)
 }
 
 static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
-				  unsigned long arg)
+								 unsigned long arg)
 {
 	struct imx708_dev *sensor = filp->private_data;
 	void __user *argp = (void __user *)arg;
@@ -132,8 +133,10 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 	if (_IOC_NR(cmd) > IMX708_IOC_MAXNR)
 		return -ENOTTY;
 
-	switch (cmd) {
-	case IMX708_GET_NUM_MODES: {
+	switch (cmd)
+	{
+	case IMX708_GET_NUM_MODES:
+	{
 		u32 num_modes = sensor->soc->num_modes;
 
 		if (copy_to_user(argp, &num_modes, sizeof(num_modes)))
@@ -141,7 +144,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_GET_MODE_INFO: {
+	case IMX708_GET_MODE_INFO:
+	{
 		struct imx708_mode_info minfo;
 		u32 index;
 
@@ -163,14 +167,15 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		minfo.fps = sensor->soc->modes[index].fps;
 		minfo.hblank = sensor->soc->modes[index].hblank;
 		minfo.vblank = sensor->soc->modes[index].vblank;
-		minfo.bit_depth = 10;	/* 10-bit raw */
+		minfo.bit_depth = 10; /* 10-bit raw */
 
 		if (copy_to_user(argp, &minfo, sizeof(minfo)))
 			return -EFAULT;
 		return 0;
 	}
 
-	case IMX708_GET_STATUS: {
+	case IMX708_GET_STATUS:
+	{
 		struct imx708_sensor_status status;
 		u32 temp = 0, status_reg = 0;
 
@@ -185,8 +190,7 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		imx708_read_reg16(sensor, IMX708_REG_STATUS, &status_reg);
 
 		status.temperature = (s8)(temp & 0xff);
-		status.frame_count = sensor->irq_counters ?
-			(u32)atomic_read(&sensor->irq_counters->frame_end) : 0;
+		status.frame_count = sensor->irq_counters ? (u32)atomic_read(&sensor->irq_counters->frame_end) : 0;
 		status.pll_locked = !!(status_reg & IMX708_STATUS_PLL_LOCKED);
 		status.streaming = sensor->streaming;
 		status.error = !!(status_reg & IMX708_STATUS_ERROR);
@@ -199,7 +203,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_SET_GAIN: {
+	case IMX708_SET_GAIN:
+	{
 		struct imx708_gain_config cfg;
 
 		if (copy_from_user(&cfg, argp, sizeof(cfg)))
@@ -213,14 +218,15 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		ret = sensor->soc->ops->set_gain(sensor, cfg.analog_gain);
 		if (!ret)
 			ret = sensor->soc->ops->set_digital_gain(sensor,
-								 cfg.digital_gain);
+													 cfg.digital_gain);
 		mutex_unlock(&sensor->lock);
 
 		imx708_ioctl_put_hw(sensor);
 		return ret;
 	}
 
-	case IMX708_GET_GAIN: {
+	case IMX708_GET_GAIN:
+	{
 		struct imx708_gain_config cfg;
 		u32 val = 0;
 
@@ -244,7 +250,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_SET_EXPOSURE: {
+	case IMX708_SET_EXPOSURE:
+	{
 		struct imx708_exposure_config cfg;
 
 		if (copy_from_user(&cfg, argp, sizeof(cfg)))
@@ -262,7 +269,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return ret;
 	}
 
-	case IMX708_GET_EXPOSURE: {
+	case IMX708_GET_EXPOSURE:
+	{
 		struct imx708_exposure_config cfg;
 		u32 val = 0;
 
@@ -284,7 +292,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_SET_HDR: {
+	case IMX708_SET_HDR:
+	{
 		struct imx708_hdr_config cfg;
 
 		if (copy_from_user(&cfg, argp, sizeof(cfg)))
@@ -303,14 +312,15 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 			ret = -EBUSY;
 		else
 			ret = sensor->soc->ops->set_hdr(sensor, cfg.mode,
-							cfg.ratio);
+											cfg.ratio);
 		mutex_unlock(&sensor->lock);
 
 		imx708_ioctl_put_hw(sensor);
 		return ret;
 	}
 
-	case IMX708_GET_HDR: {
+	case IMX708_GET_HDR:
+	{
 		struct imx708_hdr_config cfg;
 
 		memset(&cfg, 0, sizeof(cfg));
@@ -325,7 +335,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_SET_TEST_PATTERN: {
+	case IMX708_SET_TEST_PATTERN:
+	{
 		struct imx708_test_pattern_config cfg;
 
 		if (copy_from_user(&cfg, argp, sizeof(cfg)))
@@ -340,7 +351,7 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 
 		mutex_lock(&sensor->lock);
 		ret = imx708_write_reg16(sensor, IMX708_REG_TEST_PATTERN,
-					 cfg.pattern);
+								 cfg.pattern);
 		if (!ret)
 			sensor->test_pattern = cfg.pattern;
 		mutex_unlock(&sensor->lock);
@@ -349,7 +360,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return ret;
 	}
 
-	case IMX708_GET_TEST_PATTERN: {
+	case IMX708_GET_TEST_PATTERN:
+	{
 		struct imx708_test_pattern_config cfg;
 		u32 val = 0;
 
@@ -371,7 +383,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_START_STREAM: {
+	case IMX708_START_STREAM:
+	{
 		/*
 		 * Mirrors imx708_s_stream(): the runtime-PM reference is taken
 		 * here and held for the whole streaming session, and the mode
@@ -383,7 +396,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 
 		mutex_lock(&sensor->lock);
 
-		if (sensor->streaming) {
+		if (sensor->streaming)
+		{
 			mutex_unlock(&sensor->lock);
 			imx708_ioctl_put_hw(sensor);
 			return 0;
@@ -393,7 +407,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		if (!ret)
 			ret = sensor->soc->ops->power_on(sensor);
 
-		if (ret) {
+		if (ret)
+		{
 			mutex_unlock(&sensor->lock);
 			imx708_ioctl_put_hw(sensor);
 			return ret;
@@ -406,10 +421,12 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_STOP_STREAM: {
+	case IMX708_STOP_STREAM:
+	{
 		mutex_lock(&sensor->lock);
 
-		if (!sensor->streaming) {
+		if (!sensor->streaming)
+		{
 			mutex_unlock(&sensor->lock);
 			return 0;
 		}
@@ -423,7 +440,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_SOFT_RESET: {
+	case IMX708_SOFT_RESET:
+	{
 		bool was_streaming;
 
 		ret = imx708_ioctl_get_hw(sensor);
@@ -435,8 +453,9 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 
 		/* Standby, re-run init and the mode registers, then restore. */
 		ret = regmap_write(sensor->regmap, IMX708_REG_MODE_SELECT,
-				   IMX708_MODE_STANDBY);
-		if (!ret) {
+						   IMX708_MODE_STANDBY);
+		if (!ret)
+		{
 			usleep_range(10000, 15000);
 			ret = sensor->soc->ops->init(sensor);
 		}
@@ -461,7 +480,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return ret;
 	}
 
-	case IMX708_READ_REG: {
+	case IMX708_READ_REG:
+	{
 		struct imx708_reg_access ra;
 
 		if (!capable(CAP_SYS_ADMIN))
@@ -491,7 +511,8 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 		return 0;
 	}
 
-	case IMX708_WRITE_REG: {
+	case IMX708_WRITE_REG:
+	{
 		struct imx708_reg_access ra;
 
 		if (!capable(CAP_SYS_ADMIN))
@@ -523,21 +544,21 @@ static long imx708_chardev_ioctl(struct file *filp, unsigned int cmd,
 
 #ifdef CONFIG_COMPAT
 static long imx708_chardev_compat_ioctl(struct file *filp,
-					  unsigned int cmd, unsigned long arg)
+										unsigned int cmd, unsigned long arg)
 {
 	return imx708_chardev_ioctl(filp, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif
 
 static const struct file_operations imx708_fops = {
-	.owner		= THIS_MODULE,
-	.open		= imx708_chardev_open,
-	.release	= imx708_chardev_release,
-	.unlocked_ioctl	= imx708_chardev_ioctl,
+	.owner = THIS_MODULE,
+	.open = imx708_chardev_open,
+	.release = imx708_chardev_release,
+	.unlocked_ioctl = imx708_chardev_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl	= imx708_chardev_compat_ioctl,
+	.compat_ioctl = imx708_chardev_compat_ioctl,
 #endif
-	.llseek		= noop_llseek,
+	.llseek = noop_llseek,
 };
 
 /* ------------------------------------------------------------------ */
@@ -557,16 +578,18 @@ int imx708_chardev_register(struct imx708_dev *sensor, unsigned int id)
 	sensor->cdev.owner = THIS_MODULE;
 
 	ret = cdev_add(&sensor->cdev, MKDEV(MAJOR(imx708_devt), id), 1);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(sensor->dev, "failed to add cdev: %d\n", ret);
 		return ret;
 	}
 
 	/* Create device node */
 	dev = device_create(imx708_class, sensor->dev,
-			    MKDEV(MAJOR(imx708_devt), id), sensor,
-			    DRV_NAME "%u", id);
-	if (IS_ERR(dev)) {
+						MKDEV(MAJOR(imx708_devt), id), sensor,
+						DRV_NAME "%u", id);
+	if (IS_ERR(dev))
+	{
 		ret = PTR_ERR(dev);
 		dev_err(sensor->dev, "failed to create device: %d\n", ret);
 		cdev_del(&sensor->cdev);
@@ -575,7 +598,7 @@ int imx708_chardev_register(struct imx708_dev *sensor, unsigned int id)
 
 	sensor->chardev_id = id;
 	dev_dbg(sensor->dev, "char device registered as /dev/%s%u\n",
-		DRV_NAME, id);
+			DRV_NAME, id);
 
 	return 0;
 }
@@ -589,6 +612,6 @@ void imx708_chardev_unregister(struct imx708_dev *sensor)
 	WRITE_ONCE(sensor->removed, true);
 
 	device_destroy(imx708_class, MKDEV(MAJOR(imx708_devt),
-					   sensor->chardev_id));
+									   sensor->chardev_id));
 	cdev_del(&sensor->cdev);
 }

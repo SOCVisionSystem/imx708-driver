@@ -19,7 +19,13 @@ imx708-y := src/imx708_main.o \
             src/imx708_pm.o \
             src/imx708_trace.o
 
-imx708-$(CONFIG_IMX708_FAULT_INJECT) += src/imx708_fault.o
+# Fault injection lives in src/imx708_debugfs.c behind
+# CONFIG_IMX708_FAULT_INJECT; there is no separate object file for it.
+
+# DRV_VERSION is normally passed in by the top-level Makefile. Fall back to
+# the VERSION file so that a bare "make -C <kdir> M=$PWD modules" still
+# produces a sensible version string instead of an empty one.
+DRV_VERSION ?= $(shell cat $(src)/VERSION 2>/dev/null || echo 0.0.0)
 
 # Include paths for the module
 ccflags-y := -I$(src)/include \

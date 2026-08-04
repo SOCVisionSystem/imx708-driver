@@ -276,7 +276,7 @@
 #define IMX708_XCLR_DELAY_RANGE_US 1000
 
 /* Highest valid register address (16-bit register addressing) */
-#define IMX708_REG_ADDR_MAX		0xFFFF
+#define IMX708_REG_ADDR_MAX 0xFFFF
 
 /* PDAF grid dimensions */
 #define IMX708_PDAF_ROWS 12

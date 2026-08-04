@@ -32,11 +32,11 @@
 #include "imx708_platform.h"
 #include "imx708_regs.h"
 
-	/* ------------------------------------------------------------------ */
-	/* Power-managed register access helpers                               */
-	/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/* Power-managed register access helpers                               */
+/* ------------------------------------------------------------------ */
 
-	static int imx708_sysfs_read8(struct imx708_dev *sensor, u32 reg, u32 *val)
+static int imx708_sysfs_read8(struct imx708_dev *sensor, u32 reg, u32 *val)
 {
 	int ret;
 

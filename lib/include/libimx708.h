@@ -53,6 +53,21 @@ extern "C" {
 #define IMX708_API
 #endif
 
+/*
+ * Hard limits used to validate caller-supplied capture geometry. The
+ * capture path allocates width * height * 2 bytes, and those fields are
+ * ultimately attacker-controlled when the library is driven by the gRPC
+ * server, so every request is bounded here.
+ */
+#define IMX708_MAX_WIDTH		4608u
+#define IMX708_MAX_HEIGHT		2592u
+#define IMX708_MAX_FRAME_BYTES		((size_t)IMX708_MAX_WIDTH * \
+					 IMX708_MAX_HEIGHT * 2u)
+#define IMX708_MAX_BURST_FRAMES		256u
+
+/* Highest register address accepted by the raw register debug ioctls. */
+#define IMX708_REG_ADDR_MAX		0xFFFFu
+
 /* Opaque handle type */
 struct imx708_handle;
 

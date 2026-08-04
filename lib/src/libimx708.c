@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <time.h>
 
 #include "libimx708.h"
 #include "imx708_uapi.h"
@@ -66,6 +67,16 @@ void imx708_close(struct imx708_handle *handle)
 	if (!handle)
 		return;
 
+	/*
+	 * Join the streaming thread first: it dereferences the handle and
+	 * the file descriptor on every iteration, so tearing them down while
+	 * it is still running is a use-after-free.
+	 */
+	imx708_stop_streaming(handle);
+
+	free(handle->ae_state);
+	handle->ae_state = NULL;
+
 	pthread_mutex_destroy(&handle->lock);
 	close(handle->fd);
 	free(handle);
@@ -105,10 +116,28 @@ int imx708_get_num_modes(struct imx708_handle *handle, uint32_t *num_modes)
 int imx708_get_mode_info(struct imx708_handle *handle, uint32_t index,
 			  struct imx708_mode_info *info)
 {
+	struct imx708_mode_info tmp;
+	int ret;
+
 	if (!handle || !info)
 		return -EINVAL;
 
-	return imx708_ioctl(handle, IMX708_GET_MODE_INFO, &index);
+	/*
+	 * IMX708_GET_MODE_INFO is _IOWR: the driver reads the requested mode
+	 * index out of the first field and overwrites the whole structure
+	 * with the description. Passing the bare uint32_t "index" here made
+	 * the driver write sizeof(struct imx708_mode_info) bytes over a
+	 * 4-byte caller stack object, and "info" was never filled in.
+	 */
+	memset(&tmp, 0, sizeof(tmp));
+	tmp.width = index;
+
+	ret = imx708_ioctl(handle, IMX708_GET_MODE_INFO, &tmp);
+	if (ret < 0)
+		return ret;
+
+	*info = tmp;
+	return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -292,6 +321,9 @@ int imx708_write_reg(struct imx708_handle *handle, uint32_t reg, uint32_t val)
 /* Error strings                                                       */
 /* ------------------------------------------------------------------ */
 
+/* XSI strerror_r() writes into this per-thread scratch buffer. */
+static __thread char imx708_err_buf[128];
+
 const char *imx708_strerror(int errnum)
 {
 	switch (errnum) {
@@ -308,10 +340,31 @@ const char *imx708_strerror(int errnum)
 	case -EPERM:		return "Operation not permitted";
 	case -ETIMEDOUT:	return "Operation timed out";
 	default:
-		if (errnum < 0)
-			return strerror(-errnum);
-		return strerror(errnum);
+		break;
 	}
+
+	/*
+	 * strerror() is not thread-safe. Format into a thread-local buffer
+	 * instead so concurrent callers cannot clobber each other's string.
+	 */
+	{
+		int e = errnum < 0 ? -errnum : errnum;
+#if defined(_GNU_SOURCE) && defined(__GLIBC__)
+		/* glibc's GNU strerror_r() may return a static string. */
+		char *msg = strerror_r(e, imx708_err_buf,
+				       sizeof(imx708_err_buf));
+
+		if (msg != imx708_err_buf)
+			snprintf(imx708_err_buf, sizeof(imx708_err_buf),
+				 "%s", msg);
+#else
+		if (strerror_r(e, imx708_err_buf, sizeof(imx708_err_buf)) != 0)
+			snprintf(imx708_err_buf, sizeof(imx708_err_buf),
+				 "Unknown error %d", errnum);
+#endif
+	}
+
+	return imx708_err_buf;
 }
 
 /* ================================================================== */
@@ -323,9 +376,29 @@ int imx708_capture_frame(struct imx708_handle *handle,
 			  struct imx708_frame *frame)
 {
 	int ret;
-	uint32_t frame_size;
+	uint32_t width, height;
+	uint64_t frame_size;
 
 	if (!handle || !params || !frame)
+		return -EINVAL;
+
+	memset(frame, 0, sizeof(*frame));
+
+	/*
+	 * Validate the geometry before doing any arithmetic on it. The
+	 * previous "params->width * params->height * 2" was computed in
+	 * 32-bit and silently wrapped for large values, so a caller-supplied
+	 * geometry could produce a tiny allocation (or a huge one) - a
+	 * remote client of imx708-server controls these fields.
+	 */
+	width = params->width ? params->width : IMX708_MAX_WIDTH;
+	height = params->height ? params->height : IMX708_MAX_HEIGHT;
+
+	if (width > IMX708_MAX_WIDTH || height > IMX708_MAX_HEIGHT)
+		return -EINVAL;
+
+	frame_size = (uint64_t)width * (uint64_t)height * 2u;
+	if (frame_size == 0 || frame_size > IMX708_MAX_FRAME_BYTES)
 		return -EINVAL;
 
 	/* Start streaming */
@@ -333,13 +406,8 @@ int imx708_capture_frame(struct imx708_handle *handle,
 	if (ret < 0)
 		return ret;
 
-	/* Calculate frame size (raw Bayer, 10-bit = 2 bytes per 2 pixels) */
-	frame_size = params->width * params->height * 2;
-	if (frame_size < 1)
-		frame_size = 4608 * 2592 * 2;
-
 	/* Allocate frame buffer */
-	frame->data = calloc(1, frame_size);
+	frame->data = calloc(1, (size_t)frame_size);
 	if (!frame->data) {
 		imx708_stop_stream(handle);
 		return -ENOMEM;
@@ -347,10 +415,10 @@ int imx708_capture_frame(struct imx708_handle *handle,
 
 	/* Simulate frame capture (in real implementation, this would
 	 * read from the V4L2 video device node via mmap/DMA) */
-	frame->size = frame_size;
-	frame->width = params->width ? params->width : 4608;
-	frame->height = params->height ? params->height : 2592;
-	frame->stride = frame->width * 2;
+	frame->size = (size_t)frame_size;
+	frame->width = width;
+	frame->height = height;
+	frame->stride = width * 2;
 	frame->format = params->format;
 	frame->timestamp_ns = 0;
 	frame->frame_number = 0;
@@ -376,10 +444,14 @@ int imx708_capture_frames(struct imx708_handle *handle,
 			   struct imx708_frame **frames,
 			   uint32_t *num_captured)
 {
-	uint32_t n = params->num_frames ? params->num_frames : 1;
+	uint32_t n;
 	int ret;
 
 	if (!handle || !params || !frames || !num_captured)
+		return -EINVAL;
+
+	n = params->num_frames ? params->num_frames : 1;
+	if (n > IMX708_MAX_BURST_FRAMES)
 		return -EINVAL;
 
 	*frames = calloc(n, sizeof(struct imx708_frame));
@@ -421,10 +493,25 @@ void imx708_frames_free(struct imx708_frame *frames, uint32_t count)
 int imx708_frame_save_pgm(const struct imx708_frame *frame,
 			   const char *filepath)
 {
+	const uint16_t *src;
+	size_t expected;
+	size_t i;
 	FILE *f;
 	int ret;
 
 	if (!frame || !frame->data || !filepath)
+		return -EINVAL;
+
+	if (!frame->width || !frame->height)
+		return -EINVAL;
+
+	/*
+	 * The header below advertises width*height 16-bit samples, so refuse
+	 * to emit a file whose payload does not actually match - otherwise a
+	 * short buffer produces a truncated, unreadable PGM.
+	 */
+	expected = (size_t)frame->width * (size_t)frame->height * 2u;
+	if (frame->size != expected)
 		return -EINVAL;
 
 	f = fopen(filepath, "wb");
@@ -435,17 +522,33 @@ int imx708_frame_save_pgm(const struct imx708_frame *frame,
 	ret = fprintf(f, "P5\n%u %u\n65535\n", frame->width, frame->height);
 	if (ret < 0) {
 		fclose(f);
-		return -EIO;
-	}
-
-	/* Write pixel data */
-	if (fwrite(frame->data, 1, frame->size, f) != frame->size) {
-		fclose(f);
 		unlink(filepath);
 		return -EIO;
 	}
 
-	fclose(f);
+	/*
+	 * PGM stores multi-byte samples most-significant byte first, while
+	 * the sensor delivers little-endian data. Convert on the way out.
+	 */
+	src = frame->data;
+	for (i = 0; i < expected / 2; i++) {
+		unsigned char be[2];
+
+		be[0] = (unsigned char)(src[i] >> 8);
+		be[1] = (unsigned char)(src[i] & 0xff);
+
+		if (fwrite(be, 1, sizeof(be), f) != sizeof(be)) {
+			fclose(f);
+			unlink(filepath);
+			return -EIO;
+		}
+	}
+
+	if (fclose(f) != 0) {
+		unlink(filepath);
+		return -EIO;
+	}
+
 	return 0;
 }
 
@@ -480,8 +583,23 @@ static void *streaming_thread(void *arg)
 		struct imx708_frame frame;
 		int ret;
 
+		/*
+		 * imx708_capture_frame() leaves "frame" untouched on some
+		 * error paths; the old code called imx708_frame_free() on it
+		 * unconditionally and so free()d an uninitialised pointer.
+		 */
+		memset(&frame, 0, sizeof(frame));
+
 		ret = imx708_capture_frame(st->handle, &st->params, &frame);
-		if (ret == 0 && st->callback)
+		if (ret < 0) {
+			/* Back off instead of spinning on a hard failure. */
+			struct timespec ts = { 0, 20 * 1000 * 1000 };
+
+			nanosleep(&ts, NULL);
+			continue;
+		}
+
+		if (st->callback)
 			st->callback(&frame, st->user_data);
 
 		imx708_frame_free(&frame);
@@ -496,6 +614,7 @@ int imx708_start_streaming(struct imx708_handle *handle,
 			    void *user_data)
 {
 	struct streaming_thread_data *st;
+	int ret;
 
 	if (!handle || !params || !callback)
 		return -EINVAL;
@@ -511,15 +630,23 @@ int imx708_start_streaming(struct imx708_handle *handle,
 	st->running = 1;
 
 	pthread_mutex_lock(&handle->lock);
+	if (handle->streaming_data) {
+		/* A second start would leak the first thread's state. */
+		pthread_mutex_unlock(&handle->lock);
+		free(st);
+		return -EBUSY;
+	}
 	handle->streaming_data = st;
 	pthread_mutex_unlock(&handle->lock);
 
-	if (pthread_create(&st->thread, NULL, streaming_thread, st) != 0) {
-		free(st);
+	/* pthread_create() returns the error number, it does not set errno. */
+	ret = pthread_create(&st->thread, NULL, streaming_thread, st);
+	if (ret != 0) {
 		pthread_mutex_lock(&handle->lock);
 		handle->streaming_data = NULL;
 		pthread_mutex_unlock(&handle->lock);
-		return -errno;
+		free(st);
+		return -ret;
 	}
 
 	return 0;

@@ -54,16 +54,18 @@ AR      ?= $(CROSS_COMPILE)ar
 CFLAGS  ?= -O2 -Wall -Wextra -Werror
 LDFLAGS ?=
 
-.PHONY: all module lib test install clean distclean help
+.PHONY: all module module_clean lib lib_clean test test_clean \
+        install module_install lib_install test_install \
+        clean distclean help
 
-all: clean module lib test
+# "clean" is deliberately NOT a prerequisite here: make does not order
+# prerequisites, so under -j it could run concurrently with the build.
+all: module lib test
 
 # --- Kernel module (out-of-tree build) ---
 module:
 	@mkdir -p $(MODULE_DIR)
-	$(MAKE) -C $(KDIR) M=$(CURDIR) \
-		EXTRA_CFLAGS="-DDRV_VERSION=\"$(DRV_VERSION)\"" \
-		modules
+	$(MAKE) -C $(KDIR) M=$(CURDIR) DRV_VERSION=$(DRV_VERSION) modules
 	# Move build artifacts to out-of-tree build directory
 	@mv -f *.ko *.o *.mod* Module.symvers modules.order $(MODULE_DIR)/ 2>/dev/null || true
 	@rm -f .*.cmd .*.o.d 2>/dev/null || true
@@ -71,7 +73,8 @@ module:
 
 module_clean:
 	rm -rf $(MODULE_DIR)
-	rm -f *.ko *.o *.mod* Module.symvers modules.order .*.cmd .*.o.d 2>/dev/null || true
+	rm -f *.ko *.o *.mod* Module.symvers modules.order .*.cmd .*.o.d
+	rm -f src/*.o src/*.mod* src/.*.cmd
 
 # --- Userspace library ---
 LIB_SRC  := lib/src/libimx708.c
@@ -86,13 +89,22 @@ LIB_CFLAGS := -Ilib/include -Iinclude -fPIC -fvisibility=hidden \
 LIB_LDFLAGS := $(LDFLAGS) -shared -Wl,-soname,libimx708.so.0 \
                -Wl,--version-script=lib/libimx708.version
 
-lib: $(LIB_SO_FULL) $(LIB_A)
+LIB_PC := $(LIB_BUILD_DIR)/libimx708.pc
+
+lib: $(LIB_SO_FULL) $(LIB_A) $(LIB_PC)
+
+# lib/libimx708.pc is generated, not checked in; "make install" used to
+# reference a file that never existed.
+$(LIB_PC): lib/libimx708.pc.in VERSION
+	@mkdir -p $(LIB_BUILD_DIR)
+	sed -e 's|@PREFIX@|$(PREFIX)|g' \
+	    -e 's|@DRV_VERSION@|$(DRV_VERSION)|g' $< > $@
 
 $(LIB_OBJ): $(LIB_SRC) lib/include/libimx708.h include/imx708_uapi.h
 	@mkdir -p $(LIB_BUILD_DIR)
 	$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
-$(LIB_SO_FULL): $(LIB_OBJ)
+$(LIB_SO_FULL): $(LIB_OBJ) lib/libimx708.version
 	$(CC) $(LIB_LDFLAGS) -o $@ $<
 	ln -sf libimx708.so.0.$(DRV_VERSION) $(LIB_SO_MAJ)
 	ln -sf libimx708.so.0.$(DRV_VERSION) $(LIB_SO)
@@ -105,7 +117,8 @@ lib_clean:
 
 # --- Test applications ---
 TEST_CFLAGS := -Ilib/include -Iinclude $(CFLAGS) -D_GNU_SOURCE
-TEST_LDFLAGS := $(LDFLAGS) -L$(LIB_BUILD_DIR) -limx708 -lpthread
+TEST_LDFLAGS := $(LDFLAGS) -L$(LIB_BUILD_DIR) -limx708 -lpthread \
+                -Wl,-rpath,$(abspath $(LIB_BUILD_DIR))
 
 TEST_BINS := $(TEST_BUILD_DIR)/imx708_test \
              $(TEST_BUILD_DIR)/imx708_cli \
@@ -136,12 +149,16 @@ test_clean:
 # --- Install ---
 install: module_install lib_install test_install
 
-module_install:
-	install -d $(DESTDIR)/lib/modules/$(shell uname -r)/extra
-	install -m 644 $(MODULE_DIR)/imx708.ko $(DESTDIR)/lib/modules/$(shell uname -r)/extra/
-	depmod -a 2>/dev/null || true
+# KVER defaults to the running kernel, which is wrong for a cross build;
+# pass KVER=<target release> when PLATFORM=rpi4.
+KVER ?= $(shell uname -r)
 
-lib_install:
+module_install: module
+	install -d $(DESTDIR)/lib/modules/$(KVER)/extra
+	install -m 644 $(MODULE_DIR)/imx708.ko $(DESTDIR)/lib/modules/$(KVER)/extra/
+	depmod -a $(KVER) 2>/dev/null || true
+
+lib_install: lib
 	install -d $(DESTDIR)$(PREFIX)/lib
 	install -m 755 $(LIB_SO_FULL) $(DESTDIR)$(PREFIX)/lib/
 	ln -sf libimx708.so.0.$(DRV_VERSION) $(DESTDIR)$(PREFIX)/lib/libimx708.so.0
@@ -150,9 +167,9 @@ lib_install:
 	install -d $(DESTDIR)$(PREFIX)/include
 	install -m 644 lib/include/libimx708.h $(DESTDIR)$(PREFIX)/include/
 	install -d $(DESTDIR)$(PREFIX)/lib/pkgconfig
-	install -m 644 lib/libimx708.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig/
+	install -m 644 $(LIB_PC) $(DESTDIR)$(PREFIX)/lib/pkgconfig/
 
-test_install:
+test_install: test
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TEST_BUILD_DIR)/imx708_test $(DESTDIR)$(PREFIX)/bin/
 	install -m 755 $(TEST_BUILD_DIR)/imx708_cli $(DESTDIR)$(PREFIX)/bin/
@@ -161,7 +178,7 @@ test_install:
 
 # --- Clean ---
 clean: module_clean lib_clean test_clean
-	rm -f *.ko *.o *.mod* Module.symvers modules.order .*.cmd .*.o.d 2>/dev/null || true
+	rm -f *.ko *.o *.mod* Module.symvers modules.order .*.cmd .*.o.d
 	rm -rf build/
 
 distclean: clean

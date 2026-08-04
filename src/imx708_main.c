@@ -853,7 +853,8 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Get platform data (SoC match data) */
 	sensor->soc = device_get_match_data(dev);
-	if (!sensor->soc) {
+	if (!sensor->soc)
+	{
 		dev_err(dev, "no platform match data found\n");
 		ret = -ENODEV;
 		goto err_put;
@@ -863,7 +864,8 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Initialize regmap */
 	sensor->regmap = devm_regmap_init_i2c(client, sensor->soc->regmap_cfg);
-	if (IS_ERR(sensor->regmap)) {
+	if (IS_ERR(sensor->regmap))
+	{
 		ret = PTR_ERR(sensor->regmap);
 		dev_err(dev, "failed to init regmap: %d\n", ret);
 		goto err_put;
@@ -871,32 +873,37 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Get regulators (IMX708 has 4 supplies: vana1, vana2, vdig, vddl) */
 	sensor->reg_dovdd = devm_regulator_get(dev, "vana1");
-	if (IS_ERR(sensor->reg_dovdd)) {
+	if (IS_ERR(sensor->reg_dovdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_dovdd),
-				    "failed to get vana1 (2.8V analog) regulator\n");
+							"failed to get vana1 (2.8V analog) regulator\n");
 		goto err_put;
 	}
 
 	sensor->reg_avdd = devm_regulator_get(dev, "vana2");
-	if (IS_ERR(sensor->reg_avdd)) {
+	if (IS_ERR(sensor->reg_avdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_avdd),
-				    "failed to get vana2 (1.8V analog) regulator\n");
+							"failed to get vana2 (1.8V analog) regulator\n");
 		goto err_put;
 	}
 
 	sensor->reg_dvdd = devm_regulator_get(dev, "vdig");
-	if (IS_ERR(sensor->reg_dvdd)) {
+	if (IS_ERR(sensor->reg_dvdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_dvdd),
-				    "failed to get vdig (1.1V digital) regulator\n");
+							"failed to get vdig (1.1V digital) regulator\n");
 		goto err_put;
 	}
 
 	/* vddl (1.8V I/O) is optional - often tied to vana2 */
 	sensor->reg_vddl = devm_regulator_get_optional(dev, "vddl");
-	if (IS_ERR(sensor->reg_vddl)) {
-		if (PTR_ERR(sensor->reg_vddl) == -EPROBE_DEFER) {
+	if (IS_ERR(sensor->reg_vddl))
+	{
+		if (PTR_ERR(sensor->reg_vddl) == -EPROBE_DEFER)
+		{
 			ret = dev_err_probe(dev, -EPROBE_DEFER,
-					    "vddl regulator not ready\n");
+								"vddl regulator not ready\n");
 			goto err_put;
 		}
 		sensor->reg_vddl = NULL;
@@ -904,22 +911,25 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Get GPIOs */
 	sensor->gpio_reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
-	if (IS_ERR(sensor->gpio_reset)) {
+	if (IS_ERR(sensor->gpio_reset))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->gpio_reset),
-				    "failed to get reset GPIO\n");
+							"failed to get reset GPIO\n");
 		goto err_put;
 	}
 
 	sensor->gpio_power = devm_gpiod_get_optional(dev, "power", GPIOD_OUT_LOW);
-	if (IS_ERR(sensor->gpio_power)) {
+	if (IS_ERR(sensor->gpio_power))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->gpio_power),
-				    "failed to get power GPIO\n");
+							"failed to get power GPIO\n");
 		goto err_put;
 	}
 
 	/* Power on and check chip ID */
 	ret = imx708_hw_power_up(dev);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to power on sensor: %d\n", ret);
 		goto err_put;
 	}

@@ -1,0 +1,28 @@
+Source: imx708
+Section: kernel
+Priority: optional
+Maintainer: Sandesh <sandesh@soccentric.com>
+Build-Depends: debhelper-compat (= 13), linux-headers-generic
+Standards-Version: 4.6.2
+Homepage: https://github.com/soccentric/imx708
+
+Package: imx708
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Sony IMX708 camera sensor driver
+ Kernel module and userspace library for the Sony IMX708 12MP
+ MIPI CSI-2 camera sensor used in Raspberry Pi Camera Module 3.
+
+Package: imx708-dev
+Architecture: linux-any
+Depends: imx708 (= ${binary:Version}), ${misc:Depends}
+Description: Development files for IMX708 sensor library
+ Headers, static library, and pkg-config file for developing
+ applications that use the IMX708 camera sensor.
+
+Package: imx708-tools
+Architecture: linux-any
+Depends: imx708 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: Test and diagnostic tools for IMX708 sensor
+ Test suite, interactive CLI, and stress test tool for the
+ IMX708 camera sensor driver.

@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# libimx708.version - Symbol versioning script for libimx708
+#
+# Copyright (C) 2026 SoC Centric
+#
+
+LIBIMX708_0.1 {
+	global:
+		imx708_open;
+		imx708_close;
+		imx708_get_num_modes;
+		imx708_get_mode_info;
+		imx708_get_status;
+		imx708_set_gain;
+		imx708_get_gain;
+		imx708_set_exposure;
+		imx708_get_exposure;
+		imx708_set_hdr;
+		imx708_get_hdr;
+		imx708_set_test_pattern;
+		imx708_get_test_pattern;
+		imx708_start_stream;
+		imx708_stop_stream;
+		imx708_soft_reset;
+		imx708_read_reg;
+		imx708_write_reg;
+		imx708_strerror;
+		imx708_capture_frame;
+		imx708_capture_frames;
+		imx708_frame_free;
+		imx708_frames_free;
+		imx708_frame_save_pgm;
+		imx708_frame_save_jpeg;
+		imx708_start_streaming;
+		imx708_stop_streaming;
+		imx708_profile_save;
+		imx708_profile_load;
+		imx708_profile_to_file;
+		imx708_profile_from_file;
+		imx708_ae_configure;
+		imx708_ae_run;
+	local:
+		*;
+};

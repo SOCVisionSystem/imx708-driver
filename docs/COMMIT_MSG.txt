@@ -1,0 +1,20 @@
+imx708: Sony IMX708 12MP MIPI CSI-2 camera sensor driver
+
+Add support for the Sony IMX708 12MP CMOS image sensor, used in the
+Raspberry Pi Camera Module 3 (standard and wide-angle variants).
+
+The driver implements:
+- V4L2 sub-device with video and pad operations
+- I2C register access via regmap
+- Multiple sensor modes (4608x2592@30fps, 2304x1296@60fps, 640x480@120fps)
+- Analog/digital gain and exposure control via V4L2 controls
+- Test pattern generation
+- Threaded interrupt handling
+- Runtime PM and system sleep power management
+- Char device with ioctl API for sensor-specific controls
+- Sysfs attributes for all sensor parameters
+- Debugfs register dump, counters, and fault injection
+- Trace events for probe, IRQ, frame, error, and power events
+- Platform abstraction seam for easy porting to new SoCs
+
+Signed-off-by: Sandesh <sandesh@soccentric.com>

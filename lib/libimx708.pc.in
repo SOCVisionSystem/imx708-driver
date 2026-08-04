@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# libimx708.pc.in - pkg-config template for libimx708
+#
+# Copyright (C) 2026 SoC Centric
+#
+
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libimx708
+Description: Userspace library for Sony IMX708 camera sensor control
+Version: @DRV_VERSION@
+Libs: -L${libdir} -limx708
+Cflags: -I${includedir}

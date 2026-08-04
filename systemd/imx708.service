@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# imx708.service - Systemd service for IMX708 camera sensor
+#
+# This service loads the IMX708 kernel module and applies the default
+# configuration at boot. It also creates the /dev/imx708* device nodes.
+#
+# Install:
+#   sudo cp systemd/imx708.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable imx708.service
+#   sudo systemctl start imx708.service
+#
+
+[Unit]
+Description=Sony IMX708 Camera Sensor Driver
+Documentation=https://github.com/soccentric/imx708
+After=syslog.target modules.target
+Wants=dev-imx7080.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/sbin/modprobe imx708
+ExecStart=/usr/local/bin/imx708_capture /dev/imx7080 apply /etc/imx708/imx708.conf
+ExecStop=/sbin/modprobe -r imx708
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

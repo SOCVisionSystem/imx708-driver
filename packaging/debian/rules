@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: GPL-2.0-only
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) all
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/imx708 PREFIX=/usr
+
+override_dh_auto_test:
+	# Tests require hardware; skip in package build

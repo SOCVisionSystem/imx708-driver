@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * imx708-rpi.dts - Device tree overlay for IMX708 camera on Raspberry Pi
+ *
+ * Copyright (C) 2026 SoC Centric
+ *
+ * Author: Sandesh <sandesh@soccentric.com>
+ *
+ * Device tree overlay for connecting a Sony IMX708 camera sensor to the
+ * Raspberry Pi's CSI-2 connector. The sensor is controlled over I2C and
+ * outputs MIPI CSI-2 data.
+ *
+ * TODO(DT): Verify GPIO pin numbers, I2C bus, and regulator supplies
+ * against the Raspberry Pi Camera Module 3 schematic.
+ *
+ * Compile:
+ *   dtc -@ -I dts -O dtb -o imx708-rpi.dtbo imx708-rpi.dts
+ *
+ * Install:
+ *   sudo cp imx708-rpi.dtbo /boot/overlays/
+ *   # Add to /boot/config.txt: dtoverlay=imx708-rpi
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2711", "brcm,bcm2837";
+
+	fragment@0 {
+		target = <&i2c0_csi>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			/* IMX708 sensor at I2C address 0x1a */
+			sensor: imx708@1a {
+				compatible = "sony,imx708";
+				reg = <0x1a>;
+				status = "okay";
+
+				/* Clocks */
+				clocks = <&cam1_clk>;
+				clock-names = "xvclk";
+				clock-frequency = <24000000>;
+
+				/* Power supplies */
+				dovdd-supply = <&cam_dovdd>;	/* 1.8V */
+				avdd-supply  = <&cam_avdd>;	/* 2.8V */
+				dvdd-supply  = <&cam_dvdd>;	/* 1.2V */
+
+				/* GPIOs */
+				reset-gpios = <&gpio 30 GPIO_ACTIVE_LOW>;
+				power-gpios = <&gpio 31 GPIO_ACTIVE_HIGH>;
+
+				/* MIPI CSI-2: 4 data lanes + 1 clock lane */
+				port {
+					imx708_ep: endpoint {
+						remote-endpoint = <&csi1_ep>;
+						data-lanes = <1 2 3 4>;
+						clock-noncontinuous;
+						link-frequencies =
+							/bits/ 64 <450000000>;
+					};
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&csi1>;
+		__overlay__ {
+			status = "okay";
+			port {
+				csi1_ep: endpoint {
+					remote-endpoint = <&imx708_ep>;
+				};
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&cam1_clk>;
+		__overlay__ {
+			status = "okay";
+			clock-frequency = <24000000>;
+		};
+	};
+
+	/* Regulator setup for camera power */
+	fragment@3 {
+		target = <&cam1_regulator>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	__overrides__ {
+		addr = <&sensor>,"reg:0";
+		rotation = <&sensor>,"rotation:0";
+		media-controller = <&sensor>,"media-controller?";
+	};
+};

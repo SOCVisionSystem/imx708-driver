@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Dockerfile.rpi4 - Cross-build environment for IMX708 driver on Raspberry Pi
+#
+# Copyright (C) 2026 SoC Centric
+#
+# Build:
+#   docker build -t imx708-builder:rpi4 -f docker/Dockerfile.rpi4 .
+#
+# Run:
+#   docker run --rm -v $(pwd):/workspace imx708-builder:rpi4 \
+#     make PLATFORM=rpi4 all
+#
+
+FROM debian:bookworm-slim AS base
+
+# Prevent interactive debconf
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install cross toolchain and build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    make \
+    gcc \
+    g++ \
+    bc \
+    bison \
+    flex \
+    cpio \
+    kmod \
+    libssl-dev \
+    libelf-dev \
+    device-tree-compiler \
+    python3 \
+    python3-pip \
+    xz-utils \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install aarch64 cross toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    binutils-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone Raspberry Pi kernel source at a pinned tag
+# Using rpi-6.6.y branch as the LTS baseline
+ARG RPI_KERNEL_BRANCH=rpi-6.6.y
+ARG RPI_KERNEL_COMMIT=6.6.51
+
+RUN git clone --depth=1 --branch=${RPI_KERNEL_BRANCH} \
+    https://github.com/raspberrypi/linux.git /opt/kernel && \
+    cd /opt/kernel && \
+    git fetch --depth=1 origin refs/tags/${RPI_KERNEL_COMMIT}:refs/tags/${RPI_KERNEL_COMMIT} && \
+    git checkout ${RPI_KERNEL_COMMIT}
+
+# Build kernel for Raspberry Pi 4 (bcm2711_defconfig)
+ENV ARCH=arm64
+ENV CROSS_COMPILE=aarch64-linux-gnu-
+ENV KDIR=/opt/kernel
+
+RUN cd /opt/kernel && \
+    make bcm2711_defconfig && \
+    make -j$(nproc) modules_prepare
+
+# Set up workspace
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+# Default command
+CMD ["make", "PLATFORM=rpi4", "all"]

@@ -1,0 +1,7 @@
+Package: imx708
+Version: 0.1.0-1
+Description: Sony IMX708 camera sensor driver
+Section: kernel
+Priority: optional
+Maintainer: Sandesh <sandesh@soccentric.com>
+Architecture: all

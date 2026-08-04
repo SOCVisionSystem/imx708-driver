@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# imx708-grpc.service - Systemd service for IMX708 gRPC server
+#
+# This service starts the IMX708 gRPC server daemon that exposes
+# all sensor features over gRPC for remote control and monitoring.
+#
+# Install:
+#   sudo cp systemd/imx708-grpc.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable imx708-grpc.service
+#   sudo systemctl start imx708-grpc.service
+#
+
+[Unit]
+Description=IMX708 Camera Sensor gRPC Server
+Documentation=https://github.com/soccentric/imx708
+After=network.target syslog.target
+Wants=imx708.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/test -e /dev/imx7080
+ExecStart=/usr/local/bin/imx708-server --daemon --port 50051 --device /dev/imx7080
+ExecStop=/usr/bin/kill -TERM $MAINPID
+Restart=on-failure
+RestartSec=5
+PIDFile=/var/run/imx708-server.pid
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

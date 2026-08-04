@@ -16,13 +16,17 @@ without modifying the core driver code. A thread-safe C library wraps the
 ioctl interface for application developers, with both static and shared
 builds, pkg-config integration, and symbol versioning for ABI stability.
 The driver handles I2C register access via regmap with 16-bit big-endian
-addressing, runtime power management with full regulator and GPIO sequencing,
-and threaded interrupt handling for event-driven operation. A comprehensive
-test suite includes unit tests, an interactive CLI tool, a multi-threaded
-stress tester for lockdep and KCSAN validation, and a frame capture
-application. The project supports native x86_64 builds and cross-compilation
-for Raspberry Pi 4 and 5, with Docker-based cross-build environments,
-Debian/RPM/IPK packaging, and systemd integration for production deployment.
+addressing, runtime power management with full regulator and GPIO sequencing
+for four power supplies, and threaded interrupt handling for event-driven
+operation. A comprehensive test suite includes unit tests, an interactive
+CLI tool, a multi-threaded stress tester for lockdep and KCSAN validation,
+and a frame capture application. The project supports native x86_64 builds
+and cross-compilation for Raspberry Pi 4 and 5, with Docker-based cross-build
+environments, Debian/RPM/IPK packaging, and systemd integration for production
+deployment. Every source file includes SPDX license headers, and the
+documentation covers build instructions, installation, sysfs ABI, ioctl API,
+library API, testing procedures, debugging techniques, and a porting guide
+for adding support for new SoC platforms.
 
 ## Features
 
@@ -72,3 +76,5 @@ Debian/RPM/IPK packaging, and systemd integration for production deployment.
 - Comprehensive documentation with 8 dedicated guides covering build,
   install, sysfs ABI, ioctl API, library API, testing, debugging, and
   porting to new platforms
+- Python ctypes bindings for accessing the sensor from Python without
+  compiling C code

@@ -18,10 +18,9 @@
  *   The sensor is runtime-suspended (supplies off) whenever nothing is
  *   streaming, and I2C transfers to an unpowered sensor fail. Every handler
  *   that touches hardware therefore takes a runtime-PM reference first via
- *   the imx708_sysfs_read*/
-	imx708_sysfs_write helpers below.Attributes
-		*that only report driver state do not.
-			* /
+ *   the imx708_sysfs_read8() and imx708_sysfs_read16() helpers below.
+ *   Attributes that only report driver state do not.
+ */
 
 #include <linux/device.h>
 #include <linux/sysfs.h>

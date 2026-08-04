@@ -122,7 +122,7 @@
 | **Optical Format** | 1/2.43" |
 | **Output** | MIPI CSI-2 (4-lane / 2-lane) |
 | **Bit Depth** | 10-bit RAW (RAW10) |
-| **Frame Rate** | Up to 56 fps (full res), 120 fps (720p) |
+| **Frame Rate** | Up to 56 fps (2304×1296), 120 fps (720p) |
 | **HDR** | 2-exposure line-interleaved (up to 4× ratio) |
 | **PDAF** | On-chip phase detection (12×16 grid) |
 | **I2C Address** | 0x1a (fixed) |
@@ -296,10 +296,10 @@ imx708-driver/
 
 | Mode | Resolution | FPS | Pixel Rate | HBlank | VBlank | Binning |
 |------|-----------|-----|------------|--------|--------|---------|
-| 0 | 4608 × 2592 | 56 | 595.2 MHz | 15648 | 58 | None |
+| 0 | 4608 × 2592 | 14 | 595.2 MHz | 15648 | 58 | None |
 | 1 | 2304 × 1296 | 56 | 585.6 MHz | 7824 | 58 | 2×2 |
 | 2 | 1536 × 864 | 120 | 566.4 MHz | 5216 | 58 | 2×2 |
-| 3 | 4608 × 2592 (HDR) | 30 | 777.6 MHz | 15648 | 58 | None |
+| 3 | 2304 × 1296 (HDR) | 30 | 777.6 MHz | 5216 | 3673 | None |
 
 ---
 

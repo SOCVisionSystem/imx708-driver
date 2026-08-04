@@ -30,6 +30,8 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
+#include <linux/pm_runtime.h>
+
 #include "imx708_platform.h"
 #include "imx708_regs.h"
 
@@ -48,20 +50,40 @@ static int imx708_debugfs_registers_show(struct seq_file *s, void *v)
 	u32 val;
 	int ret;
 
+	/*
+	 * The sensor is runtime-suspended when idle and I2C reads to an
+	 * unpowered sensor fail, so resume it for the duration of the dump.
+	 * The reference is taken before sensor->lock because the resume
+	 * callback takes that mutex itself.
+	 */
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
 	mutex_lock(&sensor->lock);
 
 	seq_printf(s, "=== %s Register Dump ===\n\n", sensor->soc->name);
 
+/* All registers listed below are 16-bit fields spanning two addresses. */
 #define DUMP_REG(addr, name)						\
 	do {								\
-		ret = regmap_read(sensor->regmap, addr, &val);	\
+		ret = imx708_read_reg16(sensor, addr, &val);		\
 		if (ret)						\
 			seq_printf(s, "  %-30s = ERROR %d\n", name, ret); \
 		else							\
 			seq_printf(s, "  %-30s = 0x%04x\n", name, val);	\
 	} while (0)
 
-	DUMP_REG(IMX708_REG_MODE_SELECT, "MODE_SELECT");
+#define DUMP_REG8(addr, name)						\
+	do {								\
+		ret = regmap_read(sensor->regmap, addr, &val);		\
+		if (ret)						\
+			seq_printf(s, "  %-30s = ERROR %d\n", name, ret); \
+		else							\
+			seq_printf(s, "  %-30s = 0x%02x\n", name, val);	\
+	} while (0)
+
+	DUMP_REG8(IMX708_REG_MODE_SELECT, "MODE_SELECT");
 	DUMP_REG(IMX708_REG_CHIP_ID, "CHIP_ID");
 	DUMP_REG(IMX708_REG_MODULE_ID, "MODULE_ID");
 	DUMP_REG(IMX708_REG_FRAME_LENGTH, "FRAME_LENGTH");
@@ -72,18 +94,19 @@ static int imx708_debugfs_registers_show(struct seq_file *s, void *v)
 	DUMP_REG(IMX708_REG_ANALOG_GAIN, "ANALOG_GAIN");
 	DUMP_REG(IMX708_REG_DIGITAL_GAIN, "DIGITAL_GAIN");
 	DUMP_REG(IMX708_REG_TEST_PATTERN, "TEST_PATTERN");
-	DUMP_REG(IMX708_REG_TEMPERATURE, "TEMPERATURE");
-	DUMP_REG(IMX708_REG_ORIENTATION, "ORIENTATION");
-	DUMP_REG(IMX708_REG_BINNING_MODE, "BINNING_MODE");
-	DUMP_REG(IMX708_REG_BINNING_TYPE, "BINNING_TYPE");
+	DUMP_REG8(IMX708_REG_TEMPERATURE, "TEMPERATURE");
+	DUMP_REG8(IMX708_REG_ORIENTATION, "ORIENTATION");
+	DUMP_REG8(IMX708_REG_BINNING_MODE, "BINNING_MODE");
+	DUMP_REG8(IMX708_REG_BINNING_TYPE, "BINNING_TYPE");
 	DUMP_REG(IMX708_REG_INTERRUPT_ENABLE, "INTERRUPT_ENABLE");
 	DUMP_REG(IMX708_REG_INTERRUPT_STATUS, "INTERRUPT_STATUS");
 	DUMP_REG(IMX708_REG_STATUS, "STATUS");
-	DUMP_REG(IMX708_LONG_EXP_SHIFT_REG, "LONG_EXP_SHIFT");
+	DUMP_REG8(IMX708_LONG_EXP_SHIFT_REG, "LONG_EXP_SHIFT");
 	DUMP_REG(IMX708_REG_COLOUR_BALANCE_RED, "COLOUR_BALANCE_R");
 	DUMP_REG(IMX708_REG_COLOUR_BALANCE_BLUE, "COLOUR_BALANCE_B");
 
 #undef DUMP_REG
+#undef DUMP_REG8
 
 	seq_printf(s, "\n  Streaming: %s\n",
 		   sensor->streaming ? "ACTIVE" : "STANDBY");
@@ -94,6 +117,9 @@ static int imx708_debugfs_registers_show(struct seq_file *s, void *v)
 		   sensor->mode ? sensor->mode->fps : 0);
 
 	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
 
 	return 0;
 }

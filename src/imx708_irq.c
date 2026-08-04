@@ -28,37 +28,7 @@
 #include "imx708_regs.h"
 #include "imx708_trace.h"
 
-#define DRV_NAME	"imx708"
-
-/* ------------------------------------------------------------------ */
-/* Hardirq handler                                                     */
-/* ------------------------------------------------------------------ */
-
-/**
- * imx708_hardirq - Hard IRQ handler (runs with interrupts disabled)
- * @irq:   Interrupt number
- * @data:  Pointer to struct imx708_dev
- *
- * Reads and acknowledges the interrupt status register. If the interrupt
- * is ours, latches the event mask and wakes the threaded handler.
- * Returns IRQ_NONE for shared lines that are not ours.
- *
- * This function must be fast — no sleeping, no locking beyond atomic ops.
- */
-static irqreturn_t imx708_hardirq(int irq, void *data)
-{
-	struct imx708_dev *sensor = data;
-	u32 events;
-
-	events = sensor->soc->ops->irq_ack(sensor);
-	if (!events)
-		return IRQ_NONE;	/* shared line, not ours */
-
-	sensor->pending_events |= events;
-	trace_imx708_irq(events, sensor->client->addr);
-
-	return IRQ_WAKE_THREAD;
-}
+#define DRV_NAME "imx708"
 
 /* ------------------------------------------------------------------ */
 /* Threaded handler                                                    */
@@ -69,10 +39,15 @@ static irqreturn_t imx708_hardirq(int irq, void *data)
  * @irq:   Interrupt number
  * @data:  Pointer to struct imx708_dev
  *
- * Processes latched interrupt events. Takes sensor->lock before accessing
- * sensor state. Handles each event type:
+ * The sensor is on an I2C bus, so acknowledging the interrupt requires a
+ * bus transfer that may sleep. That makes a hard-IRQ handler impossible:
+ * the handler is registered with a NULL primary handler and IRQF_ONESHOT
+ * so the line stays masked until this function has read and cleared the
+ * status register.
  *
- *   FRAME_START/END - Update frame counters, wake waitqueues
+ * Handles each event type:
+ *
+ *   FRAME_START/END - Update frame counters
  *   FIFO_OVERFLOW   - Log error, increment error counter
  *   PLL_LOCK/UNLOCK - Log state change
  *   TEMPERATURE     - Read and log die temperature
@@ -85,71 +60,88 @@ static irqreturn_t imx708_threaded_irq(int irq, void *data)
 
 	mutex_lock(&sensor->lock);
 
-	events = sensor->pending_events;
-	sensor->pending_events = 0;
+	/* Read + clear the status register; this is what may sleep. */
+	events = sensor->soc->ops->irq_ack(sensor);
+	events |= (u32)atomic_xchg(&sensor->pending_events, 0);
 
-	if (events & IMX708_INT_FRAME_START) {
+	if (!events)
+	{
+		mutex_unlock(&sensor->lock);
+		return IRQ_NONE; /* shared line, not ours */
+	}
+
+	trace_imx708_irq(events, sensor->client->addr);
+
+	if (events & IMX708_INT_FRAME_START)
+	{
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->frame_start);
 		trace_imx708_frame(0, sensor->client->addr, true);
 	}
 
-	if (events & IMX708_INT_FRAME_END) {
+	if (events & IMX708_INT_FRAME_END)
+	{
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->frame_end);
 		trace_imx708_frame(0, sensor->client->addr, false);
 	}
 
-	if (events & IMX708_INT_FIFO_OVERFLOW) {
+	if (events & IMX708_INT_FIFO_OVERFLOW)
+	{
 		dev_err_ratelimited(sensor->dev, "FIFO overflow\n");
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->fifo_overflow);
 		if (sensor->error_counters)
 			atomic_inc(&sensor->error_counters->other);
 		trace_imx708_error("FIFO overflow", -EOVERFLOW,
-				   sensor->client->addr);
+						   sensor->client->addr);
 	}
 
-	if (events & IMX708_INT_PLL_LOCK) {
+	if (events & IMX708_INT_PLL_LOCK)
+	{
 		dev_dbg(sensor->dev, "PLL locked\n");
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->pll_lock);
 	}
 
-	if (events & IMX708_INT_PLL_UNLOCK) {
+	if (events & IMX708_INT_PLL_UNLOCK)
+	{
 		dev_warn(sensor->dev, "PLL unlocked!\n");
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->pll_unlock);
 		if (sensor->error_counters)
 			atomic_inc(&sensor->error_counters->other);
 		trace_imx708_error("PLL unlock", -EIO,
-				   sensor->client->addr);
+						   sensor->client->addr);
 	}
 
-	if (events & IMX708_INT_TEMPERATURE) {
+	if (events & IMX708_INT_TEMPERATURE)
+	{
 		u32 temp;
 
-		if (!regmap_read(sensor->regmap, IMX708_REG_TEMPERATURE, &temp)) {
+		if (!regmap_read(sensor->regmap, IMX708_REG_TEMPERATURE, &temp))
+		{
 			dev_dbg(sensor->dev, "die temperature: %d C\n",
-				(s32)temp);
+					(s32)(s8)temp);
 		}
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->temperature);
 	}
 
-	if (events & IMX708_INT_ERROR) {
+	if (events & IMX708_INT_ERROR)
+	{
 		u32 err_status = 0;
 
-		regmap_read(sensor->regmap, IMX708_REG_STATUS, &err_status);
+		imx708_read_reg16(sensor, IMX708_REG_STATUS, &err_status);
 		dev_err_ratelimited(sensor->dev,
-				    "sensor error, status=0x%04x\n",
-				    err_status);
+							"sensor error, status=0x%04x\n",
+							err_status);
 		if (sensor->irq_counters)
 			atomic_inc(&sensor->irq_counters->error);
 		if (sensor->error_counters)
 			atomic_inc(&sensor->error_counters->other);
 		trace_imx708_error("sensor error", -EIO,
-				   sensor->client->addr);
+						   sensor->client->addr);
 	}
 
 	mutex_unlock(&sensor->lock);
@@ -167,27 +159,47 @@ int imx708_irq_init(struct imx708_dev *sensor)
 
 	/* Allocate interrupt counters */
 	sensor->irq_counters = devm_kzalloc(dev,
-					    sizeof(*sensor->irq_counters),
-					    GFP_KERNEL);
+										sizeof(*sensor->irq_counters),
+										GFP_KERNEL);
 	if (!sensor->irq_counters)
 		return -ENOMEM;
 
 	/* Allocate error counters */
 	sensor->error_counters = devm_kzalloc(dev,
-					      sizeof(*sensor->error_counters),
-					      GFP_KERNEL);
+										  sizeof(*sensor->error_counters),
+										  GFP_KERNEL);
 	if (!sensor->error_counters)
 		return -ENOMEM;
 
-	/* Request threaded IRQ */
+	atomic_set(&sensor->pending_events, 0);
+
+	/*
+	 * The IMX708 module on the Raspberry Pi Camera Module 3 does not
+	 * route an interrupt to the host, and the DT binding marks
+	 * "interrupts" optional. Counters are still allocated above so that
+	 * debugfs and the status ioctls work on those boards.
+	 */
+	if (sensor->client->irq <= 0)
+	{
+		dev_dbg(dev, "no interrupt line, IRQ handling disabled\n");
+		return 0;
+	}
+
+	/*
+	 * NULL primary handler + IRQF_ONESHOT: acknowledging the interrupt
+	 * needs an I2C transfer, which may sleep and therefore cannot run in
+	 * hard-IRQ context. The line stays masked until the thread returns.
+	 */
 	ret = devm_request_threaded_irq(dev, sensor->client->irq,
-					imx708_hardirq,
-					imx708_threaded_irq,
-					IRQF_TRIGGER_RISING | IRQF_SHARED,
-					DRV_NAME, sensor);
-	if (ret) {
+									NULL,
+									imx708_threaded_irq,
+									IRQF_TRIGGER_RISING | IRQF_SHARED |
+										IRQF_ONESHOT,
+									DRV_NAME, sensor);
+	if (ret)
+	{
 		dev_err(dev, "failed to request threaded IRQ %d: %d\n",
-			sensor->client->irq, ret);
+				sensor->client->irq, ret);
 		return ret;
 	}
 

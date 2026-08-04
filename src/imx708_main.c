@@ -52,7 +52,7 @@
 #include "imx708_uapi.h"
 #include "imx708_trace.h"
 
-#define DRV_NAME	"imx708"
+#define DRV_NAME "imx708"
 
 /* DRV_VERSION is passed via EXTRA_CFLAGS from the Makefile */
 
@@ -61,16 +61,16 @@
  * Sub-module entry points. Declared in imx708_platform.h; the char device
  * region and class are owned by imx708_chardev.c.
  */
-extern dev_t		imx708_devt;
-extern struct class	*imx708_class;
-#define IMX708_MAX_DEVICES	4
+extern dev_t imx708_devt;
+extern struct class *imx708_class;
+#define IMX708_MAX_DEVICES 4
 
 /* SoC descriptions from imx708_platform.c */
 extern const struct imx708_soc_data imx708_soc_rpi;
 extern const struct imx708_soc_data imx708_soc_rpi_wide;
 
 /* Number of I2C retry attempts */
-#define IMX708_I2C_RETRIES		3
+#define IMX708_I2C_RETRIES 3
 
 /* Allocates the per-instance minor / debugfs / sysfs directory index. */
 static DEFINE_IDA(imx708_ida);
@@ -90,9 +90,11 @@ static int imx708_s_stream(struct v4l2_subdev *sd, int enable)
 	 * @lock, otherwise pm_runtime_get_sync() would deadlock against the
 	 * mutex this function already holds.
 	 */
-	if (enable) {
+	if (enable)
+	{
 		ret = pm_runtime_resume_and_get(sensor->dev);
-		if (ret < 0) {
+		if (ret < 0)
+		{
 			dev_err(sensor->dev, "failed to power on: %d\n", ret);
 			return ret;
 		}
@@ -100,16 +102,19 @@ static int imx708_s_stream(struct v4l2_subdev *sd, int enable)
 
 	mutex_lock(&sensor->lock);
 
-	if (sensor->streaming == !!enable) {
+	if (sensor->streaming == !!enable)
+	{
 		mutex_unlock(&sensor->lock);
 		if (enable)
 			pm_runtime_put(sensor->dev);
 		return 0;
 	}
 
-	if (enable) {
+	if (enable)
+	{
 		ret = sensor->soc->ops->set_mode(sensor, &sensor->fmt);
-		if (ret) {
+		if (ret)
+		{
 			dev_err(sensor->dev, "failed to set mode: %d\n", ret);
 			pm_runtime_put(sensor->dev);
 			goto out_unlock;
@@ -117,7 +122,8 @@ static int imx708_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Start streaming — take sensor out of standby */
 		ret = sensor->soc->ops->power_on(sensor);
-		if (ret) {
+		if (ret)
+		{
 			dev_err(sensor->dev, "failed to start streaming: %d\n", ret);
 			pm_runtime_put(sensor->dev);
 			goto out_unlock;
@@ -126,7 +132,9 @@ static int imx708_s_stream(struct v4l2_subdev *sd, int enable)
 		sensor->streaming = true;
 		trace_imx708_stream(sensor->client->addr, true);
 		dev_dbg(sensor->dev, "streaming started\n");
-	} else {
+	}
+	else
+	{
 		ret = sensor->soc->ops->power_off(sensor);
 		if (ret)
 			dev_warn(sensor->dev, "power_off failed: %d\n", ret);
@@ -148,8 +156,8 @@ out_unlock:
 }
 
 static int imx708_g_frame_interval(struct v4l2_subdev *sd,
-				    struct v4l2_subdev_state *state,
-				    struct v4l2_subdev_frame_interval *fi)
+								   struct v4l2_subdev_state *state,
+								   struct v4l2_subdev_frame_interval *fi)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 
@@ -162,8 +170,8 @@ static int imx708_g_frame_interval(struct v4l2_subdev *sd,
 }
 
 static int imx708_enum_mbus_code(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_state *state,
-				  struct v4l2_subdev_mbus_code_enum *code)
+								 struct v4l2_subdev_state *state,
+								 struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 
@@ -175,17 +183,19 @@ static int imx708_enum_mbus_code(struct v4l2_subdev *sd,
 }
 
 static int imx708_enum_frame_size(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_state *state,
-				   struct v4l2_subdev_frame_size_enum *fse)
+								  struct v4l2_subdev_state *state,
+								  struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 	int i, count = 0;
 
-	for (i = 0; i < sensor->soc->num_modes; i++) {
+	for (i = 0; i < sensor->soc->num_modes; i++)
+	{
 		if (sensor->soc->modes[i].code != fse->code)
 			continue;
 
-		if (count == fse->index) {
+		if (count == fse->index)
+		{
 			fse->min_width = sensor->soc->modes[i].width;
 			fse->max_width = sensor->soc->modes[i].width;
 			fse->min_height = sensor->soc->modes[i].height;
@@ -199,8 +209,8 @@ static int imx708_enum_frame_size(struct v4l2_subdev *sd,
 }
 
 static int imx708_get_fmt(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_state *state,
-			   struct v4l2_subdev_format *format)
+						  struct v4l2_subdev_state *state,
+						  struct v4l2_subdev_format *format)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 
@@ -212,8 +222,8 @@ static int imx708_get_fmt(struct v4l2_subdev *sd,
 }
 
 static int imx708_set_fmt(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_state *state,
-			   struct v4l2_subdev_format *format)
+						  struct v4l2_subdev_state *state,
+						  struct v4l2_subdev_format *format)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 	const struct imx708_mode *best_mode = NULL;
@@ -222,23 +232,25 @@ static int imx708_set_fmt(struct v4l2_subdev *sd,
 	mutex_lock(&sensor->lock);
 
 	/* Find the best matching mode */
-	for (i = 0; i < sensor->soc->num_modes; i++) {
+	for (i = 0; i < sensor->soc->num_modes; i++)
+	{
 		const struct imx708_mode *m = &sensor->soc->modes[i];
 
 		if (format->format.code != m->code)
 			continue;
 
 		if (format->format.width == m->width &&
-		    format->format.height == m->height) {
+			format->format.height == m->height)
+		{
 			best_mode = m;
 			break;
 		}
 
 		/* Accept closest match if exact not found */
 		if (!best_mode ||
-		    (m->width <= format->format.width &&
-		     m->height <= format->format.height &&
-		     m->width > best_mode->width))
+			(m->width <= format->format.width &&
+			 m->height <= format->format.height &&
+			 m->width > best_mode->width))
 			best_mode = m;
 	}
 
@@ -246,7 +258,8 @@ static int imx708_set_fmt(struct v4l2_subdev *sd,
 		best_mode = &sensor->soc->modes[0];
 
 	/* If streaming, only allow try — can't change while active */
-	if (sensor->streaming) {
+	if (sensor->streaming)
+	{
 		format->format.width = best_mode->width;
 		format->format.height = best_mode->height;
 		format->format.code = best_mode->code;
@@ -271,7 +284,7 @@ static int imx708_set_fmt(struct v4l2_subdev *sd,
 }
 
 static int imx708_init_cfg(struct v4l2_subdev *sd,
-			    struct v4l2_subdev_state *state)
+						   struct v4l2_subdev_state *state)
 {
 	struct imx708_dev *sensor = to_imx708_dev(sd);
 	struct v4l2_mbus_framefmt *fmt;
@@ -290,24 +303,24 @@ static int imx708_init_cfg(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_video_ops imx708_video_ops = {
-	.s_stream		= imx708_s_stream,
+	.s_stream = imx708_s_stream,
 };
 
 static const struct v4l2_subdev_pad_ops imx708_pad_ops = {
-	.enum_mbus_code		= imx708_enum_mbus_code,
-	.enum_frame_size	= imx708_enum_frame_size,
-	.get_fmt		= imx708_get_fmt,
-	.set_fmt		= imx708_set_fmt,
-	.get_frame_interval	= imx708_g_frame_interval,
+	.enum_mbus_code = imx708_enum_mbus_code,
+	.enum_frame_size = imx708_enum_frame_size,
+	.get_fmt = imx708_get_fmt,
+	.set_fmt = imx708_set_fmt,
+	.get_frame_interval = imx708_g_frame_interval,
 };
 
 static const struct v4l2_subdev_ops imx708_subdev_ops = {
-	.video	= &imx708_video_ops,
-	.pad	= &imx708_pad_ops,
+	.video = &imx708_video_ops,
+	.pad = &imx708_pad_ops,
 };
 
 static const struct v4l2_subdev_internal_ops imx708_internal_ops = {
-	.init_state	= imx708_init_cfg,
+	.init_state = imx708_init_cfg,
 };
 
 /* ------------------------------------------------------------------ */
@@ -322,7 +335,8 @@ static int imx708_set_ctrl(struct v4l2_ctrl *ctrl)
 
 	mutex_lock(&sensor->lock);
 
-	switch (ctrl->id) {
+	switch (ctrl->id)
+	{
 	case V4L2_CID_ANALOGUE_GAIN:
 		ret = sensor->soc->ops->set_gain(sensor, ctrl->val);
 		break;
@@ -416,7 +430,7 @@ static const struct v4l2_ctrl_ops imx708_ctrl_ops = {
 	.s_ctrl = imx708_set_ctrl,
 };
 
-static const char * const imx708_test_pattern_menu[] = {
+static const char *const imx708_test_pattern_menu[] = {
 	"Disabled",
 	"Color Bars",
 	"Solid Color",
@@ -427,14 +441,14 @@ static const char * const imx708_test_pattern_menu[] = {
 	"Alternate Pattern",
 };
 
-static const char * const imx708_power_line_freq_menu[] = {
+static const char *const imx708_power_line_freq_menu[] = {
 	"Disabled",
 	"50 Hz",
 	"60 Hz",
 	"Auto",
 };
 
-static const char * const imx708_scene_mode_menu[] = {
+static const char *const imx708_scene_mode_menu[] = {
 	"Auto",
 	"Night",
 	"Sport",
@@ -446,7 +460,7 @@ static const char * const imx708_scene_mode_menu[] = {
 	"Candlelight",
 };
 
-static const char * const imx708_colorfx_menu[] = {
+static const char *const imx708_colorfx_menu[] = {
 	"None",
 	"B&W",
 	"Sepia",
@@ -469,15 +483,41 @@ static const char * const imx708_colorfx_menu[] = {
  * value multiplied by 1000, as required by the V4L2 control documentation.
  */
 static const s64 imx708_exposure_bias_menu[] = {
-	-3000, -2750, -2500, -2250, -2000, -1750, -1500, -1250,
-	-1000,  -750,  -500,  -250,     0,   250,   500,   750,
-	 1000,  1250,  1500,  1750,  2000,  2250,  2500,  2750,
-	 3000,
+	-3000,
+	-2750,
+	-2500,
+	-2250,
+	-2000,
+	-1750,
+	-1500,
+	-1250,
+	-1000,
+	-750,
+	-500,
+	-250,
+	0,
+	250,
+	500,
+	750,
+	1000,
+	1250,
+	1500,
+	1750,
+	2000,
+	2250,
+	2500,
+	2750,
+	3000,
 };
-#define IMX708_EXPOSURE_BIAS_DEF_IDX	12	/* 0 EV */
+#define IMX708_EXPOSURE_BIAS_DEF_IDX 12 /* 0 EV */
 
 static const s64 imx708_iso_menu[] = {
-	100000, 200000, 400000, 800000, 1600000, 3200000,
+	100000,
+	200000,
+	400000,
+	800000,
+	1600000,
+	3200000,
 };
 
 static int imx708_init_controls(struct imx708_dev *sensor)
@@ -493,145 +533,145 @@ static int imx708_init_controls(struct imx708_dev *sensor)
 
 	/* Analog gain, in sensor-specific units (dB * 1000) */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_ANALOGUE_GAIN,
-			  IMX708_GAIN_MIN, IMX708_GAIN_MAX,
-			  IMX708_GAIN_STEP, IMX708_GAIN_DEFAULT);
+					  V4L2_CID_ANALOGUE_GAIN,
+					  IMX708_GAIN_MIN, IMX708_GAIN_MAX,
+					  IMX708_GAIN_STEP, IMX708_GAIN_DEFAULT);
 
 	/* Digital gain */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_DIGITAL_GAIN,
-			  IMX708_DGTL_GAIN_MIN, IMX708_DGTL_GAIN_MAX,
-			  IMX708_DGTL_GAIN_STEP, IMX708_DGTL_GAIN_DEFAULT);
+					  V4L2_CID_DIGITAL_GAIN,
+					  IMX708_DGTL_GAIN_MIN, IMX708_DGTL_GAIN_MAX,
+					  IMX708_DGTL_GAIN_STEP, IMX708_DGTL_GAIN_DEFAULT);
 
 	/* Exposure in line units */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_EXPOSURE,
-			  IMX708_EXPOSURE_MIN, IMX708_EXPOSURE_MAX,
-			  1, IMX708_EXPOSURE_DEFAULT);
+					  V4L2_CID_EXPOSURE,
+					  IMX708_EXPOSURE_MIN, IMX708_EXPOSURE_MAX,
+					  1, IMX708_EXPOSURE_DEFAULT);
 
 	/* Auto exposure bias (+/- 3 EV in 0.25 steps) */
 	v4l2_ctrl_new_int_menu(hdl, &imx708_ctrl_ops,
-			       V4L2_CID_AUTO_EXPOSURE_BIAS,
-			       ARRAY_SIZE(imx708_exposure_bias_menu) - 1,
-			       IMX708_EXPOSURE_BIAS_DEF_IDX,
-			       imx708_exposure_bias_menu);
+						   V4L2_CID_AUTO_EXPOSURE_BIAS,
+						   ARRAY_SIZE(imx708_exposure_bias_menu) - 1,
+						   IMX708_EXPOSURE_BIAS_DEF_IDX,
+						   imx708_exposure_bias_menu);
 
 	/* ISO sensitivity */
 	v4l2_ctrl_new_int_menu(hdl, &imx708_ctrl_ops,
-			       V4L2_CID_ISO_SENSITIVITY,
-			       ARRAY_SIZE(imx708_iso_menu) - 1, 0,
-			       imx708_iso_menu);
+						   V4L2_CID_ISO_SENSITIVITY,
+						   ARRAY_SIZE(imx708_iso_menu) - 1, 0,
+						   imx708_iso_menu);
 
 	v4l2_ctrl_new_std_menu(hdl, &imx708_ctrl_ops,
-			       V4L2_CID_ISO_SENSITIVITY_AUTO,
-			       1, 0, V4L2_ISO_SENSITIVITY_AUTO);
+						   V4L2_CID_ISO_SENSITIVITY_AUTO,
+						   1, 0, V4L2_ISO_SENSITIVITY_AUTO);
 
 	/* 3A lock (auto exposure / auto white balance lock) */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_3A_LOCK,
-			  0, (V4L2_LOCK_EXPOSURE | V4L2_LOCK_WHITE_BALANCE |
-			      V4L2_LOCK_FOCUS),
-			  0, 0);
+					  V4L2_CID_3A_LOCK,
+					  0, (V4L2_LOCK_EXPOSURE | V4L2_LOCK_WHITE_BALANCE | V4L2_LOCK_FOCUS),
+					  0, 0);
 
 	/* === Image Processing === */
 
 	/* Brightness (black level offset) */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_BRIGHTNESS,
-			  -255, 255, 1, 0);
+					  V4L2_CID_BRIGHTNESS,
+					  -255, 255, 1, 0);
 
 	/* Contrast */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_CONTRAST,
-			  0, 255, 1, 128);
+					  V4L2_CID_CONTRAST,
+					  0, 255, 1, 128);
 
 	/* Saturation */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_SATURATION,
-			  0, 255, 1, 128);
+					  V4L2_CID_SATURATION,
+					  0, 255, 1, 128);
 
 	/* Hue */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_HUE,
-			  -180, 180, 1, 0);
+					  V4L2_CID_HUE,
+					  -180, 180, 1, 0);
 
 	/* Gamma */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_GAMMA,
-			  0, 255, 1, 128);
+					  V4L2_CID_GAMMA,
+					  0, 255, 1, 128);
 
 	/* Sharpness */
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_SHARPNESS,
-			  0, 15, 1, 0);
+					  V4L2_CID_SHARPNESS,
+					  0, 15, 1, 0);
 
 	/* === White Balance === */
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_AUTO_WHITE_BALANCE,
-			  0, 1, 1, 1);
+					  V4L2_CID_AUTO_WHITE_BALANCE,
+					  0, 1, 1, 1);
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_WHITE_BALANCE_TEMPERATURE,
-			  2000, 8000, 100, 5000);
+					  V4L2_CID_WHITE_BALANCE_TEMPERATURE,
+					  2000, 8000, 100, 5000);
 
 	/* === Test Pattern === */
 
 	v4l2_ctrl_new_std_menu_items(hdl, &imx708_ctrl_ops,
-				     V4L2_CID_TEST_PATTERN,
-				     ARRAY_SIZE(imx708_test_pattern_menu) - 1,
-				     0, 0, imx708_test_pattern_menu);
+								 V4L2_CID_TEST_PATTERN,
+								 ARRAY_SIZE(imx708_test_pattern_menu) - 1,
+								 0, 0, imx708_test_pattern_menu);
 
 	/* === Flip / Mirror === */
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_HFLIP, 0, 1, 1, 0);
+					  V4L2_CID_HFLIP, 0, 1, 1, 0);
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_VFLIP, 0, 1, 1, 0);
+					  V4L2_CID_VFLIP, 0, 1, 1, 0);
 
 	/* === Power Line Frequency (anti-flicker) === */
 
 	v4l2_ctrl_new_std_menu_items(hdl, &imx708_ctrl_ops,
-				     V4L2_CID_POWER_LINE_FREQUENCY,
-				     ARRAY_SIZE(imx708_power_line_freq_menu) - 1,
-				     0, 0, imx708_power_line_freq_menu);
+								 V4L2_CID_POWER_LINE_FREQUENCY,
+								 ARRAY_SIZE(imx708_power_line_freq_menu) - 1,
+								 0, 0, imx708_power_line_freq_menu);
 
 	/* === Backlight Compensation === */
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_BACKLIGHT_COMPENSATION,
-			  0, 2, 1, 0);
+					  V4L2_CID_BACKLIGHT_COMPENSATION,
+					  0, 2, 1, 0);
 
 	/* === Scene Mode === */
 
 	v4l2_ctrl_new_std_menu_items(hdl, &imx708_ctrl_ops,
-				     V4L2_CID_SCENE_MODE,
-				     ARRAY_SIZE(imx708_scene_mode_menu) - 1,
-				     0, 0, imx708_scene_mode_menu);
+								 V4L2_CID_SCENE_MODE,
+								 ARRAY_SIZE(imx708_scene_mode_menu) - 1,
+								 0, 0, imx708_scene_mode_menu);
 
 	/* === Color Effects === */
 
 	v4l2_ctrl_new_std_menu_items(hdl, &imx708_ctrl_ops,
-				     V4L2_CID_COLORFX,
-				     ARRAY_SIZE(imx708_colorfx_menu) - 1,
-				     0, 0, imx708_colorfx_menu);
+								 V4L2_CID_COLORFX,
+								 ARRAY_SIZE(imx708_colorfx_menu) - 1,
+								 0, 0, imx708_colorfx_menu);
 
 	/* === Zoom / Pan / Tilt (digital) === */
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_ZOOM_ABSOLUTE,
-			  0, 100, 1, 0);
+					  V4L2_CID_ZOOM_ABSOLUTE,
+					  0, 100, 1, 0);
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_PAN_ABSOLUTE,
-			  -100, 100, 1, 0);
+					  V4L2_CID_PAN_ABSOLUTE,
+					  -100, 100, 1, 0);
 
 	v4l2_ctrl_new_std(hdl, &imx708_ctrl_ops,
-			  V4L2_CID_TILT_ABSOLUTE,
-			  -100, 100, 1, 0);
+					  V4L2_CID_TILT_ABSOLUTE,
+					  -100, 100, 1, 0);
 
-	if (hdl->error) {
+	if (hdl->error)
+	{
 		ret = hdl->error;
 		v4l2_ctrl_handler_free(hdl);
 		return ret;
@@ -653,19 +693,20 @@ static int imx708_hw_power_up_locked(struct device *dev)
 	dev_dbg(dev, "power on\n");
 
 	/* Enable regulators (IMX708: vana1=2.8V, vana2=1.8V, vdig=1.1V, vddl=1.8V) */
-	ret = regulator_enable(sensor->reg_dovdd);	/* vana1 */
+	ret = regulator_enable(sensor->reg_dovdd); /* vana1 */
 	if (ret)
 		return ret;
 
-	ret = regulator_enable(sensor->reg_avdd);	/* vana2 */
+	ret = regulator_enable(sensor->reg_avdd); /* vana2 */
 	if (ret)
 		goto err_dovdd;
 
-	ret = regulator_enable(sensor->reg_dvdd);	/* vdig */
+	ret = regulator_enable(sensor->reg_dvdd); /* vdig */
 	if (ret)
 		goto err_avdd;
 
-	if (sensor->reg_vddl) {				/* vddl (optional) */
+	if (sensor->reg_vddl)
+	{ /* vddl (optional) */
 		ret = regulator_enable(sensor->reg_vddl);
 		if (ret)
 			goto err_dvdd;
@@ -675,7 +716,8 @@ static int imx708_hw_power_up_locked(struct device *dev)
 	usleep_range(3000, 5000);
 
 	/* Toggle reset GPIO */
-	if (sensor->gpio_reset) {
+	if (sensor->gpio_reset)
+	{
 		gpiod_set_value_cansleep(sensor->gpio_reset, 1);
 		usleep_range(1000, 2000);
 		gpiod_set_value_cansleep(sensor->gpio_reset, 0);
@@ -752,9 +794,8 @@ int imx708_hw_power_down(struct device *dev)
 
 static const struct dev_pm_ops imx708_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(imx708_suspend, imx708_resume)
-	SET_RUNTIME_PM_OPS(imx708_runtime_suspend, imx708_runtime_resume,
-			   NULL)
-};
+		SET_RUNTIME_PM_OPS(imx708_runtime_suspend, imx708_runtime_resume,
+						   NULL)};
 
 /* ------------------------------------------------------------------ */
 /* I2C driver probe / remove                                           */
@@ -770,7 +811,8 @@ static int imx708_check_chip_id(struct imx708_dev *sensor)
 	 * 0x0017). A single regmap_read() only returns the high byte.
 	 */
 	ret = imx708_read_reg16(sensor, IMX708_REG_CHIP_ID, &chip_id);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(sensor->dev, "failed to read chip ID: %d\n", ret);
 		return ret;
 	}
@@ -778,10 +820,11 @@ static int imx708_check_chip_id(struct imx708_dev *sensor)
 	dev_dbg(sensor->dev, "chip ID: 0x%04x\n", chip_id);
 
 	/* IMX708 chip ID is 0x0708 */
-	if (chip_id != IMX708_CHIP_ID) {
+	if (chip_id != IMX708_CHIP_ID)
+	{
 		dev_err(sensor->dev,
-			"unexpected chip ID 0x%04x (expected 0x%04x)\n",
-			chip_id, IMX708_CHIP_ID);
+				"unexpected chip ID 0x%04x (expected 0x%04x)\n",
+				chip_id, IMX708_CHIP_ID);
 		return -ENODEV;
 	}
 
@@ -805,7 +848,8 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Get platform data (SoC match data) */
 	sensor->soc = device_get_match_data(dev);
-	if (!sensor->soc) {
+	if (!sensor->soc)
+	{
 		dev_err(dev, "no platform match data found\n");
 		return -ENODEV;
 	}
@@ -814,7 +858,8 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Initialize regmap */
 	sensor->regmap = devm_regmap_init_i2c(client, sensor->soc->regmap_cfg);
-	if (IS_ERR(sensor->regmap)) {
+	if (IS_ERR(sensor->regmap))
+	{
 		ret = PTR_ERR(sensor->regmap);
 		dev_err(dev, "failed to init regmap: %d\n", ret);
 		return ret;
@@ -822,55 +867,62 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Get regulators (IMX708 has 4 supplies: vana1, vana2, vdig, vddl) */
 	sensor->reg_dovdd = devm_regulator_get(dev, "vana1");
-	if (IS_ERR(sensor->reg_dovdd)) {
+	if (IS_ERR(sensor->reg_dovdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_dovdd),
-				    "failed to get vana1 (2.8V analog) regulator\n");
+							"failed to get vana1 (2.8V analog) regulator\n");
 		return ret;
 	}
 
 	sensor->reg_avdd = devm_regulator_get(dev, "vana2");
-	if (IS_ERR(sensor->reg_avdd)) {
+	if (IS_ERR(sensor->reg_avdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_avdd),
-				    "failed to get vana2 (1.8V analog) regulator\n");
+							"failed to get vana2 (1.8V analog) regulator\n");
 		return ret;
 	}
 
 	sensor->reg_dvdd = devm_regulator_get(dev, "vdig");
-	if (IS_ERR(sensor->reg_dvdd)) {
+	if (IS_ERR(sensor->reg_dvdd))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->reg_dvdd),
-				    "failed to get vdig (1.1V digital) regulator\n");
+							"failed to get vdig (1.1V digital) regulator\n");
 		return ret;
 	}
 
 	/* vddl (1.8V I/O) is optional — often tied to vana2 */
 	sensor->reg_vddl = devm_regulator_get_optional(dev, "vddl");
-	if (IS_ERR(sensor->reg_vddl)) {
+	if (IS_ERR(sensor->reg_vddl))
+	{
 		if (PTR_ERR(sensor->reg_vddl) == -EPROBE_DEFER)
 			return dev_err_probe(dev, -EPROBE_DEFER,
-					     "vddl regulator not ready\n");
+								 "vddl regulator not ready\n");
 		sensor->reg_vddl = NULL;
 	}
 
 	/* Get GPIOs */
 	sensor->gpio_reset = devm_gpiod_get_optional(dev, "reset",
-						     GPIOD_OUT_LOW);
-	if (IS_ERR(sensor->gpio_reset)) {
+												 GPIOD_OUT_LOW);
+	if (IS_ERR(sensor->gpio_reset))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->gpio_reset),
-				    "failed to get reset GPIO\n");
+							"failed to get reset GPIO\n");
 		return ret;
 	}
 
 	sensor->gpio_power = devm_gpiod_get_optional(dev, "power",
-						      GPIOD_OUT_LOW);
-	if (IS_ERR(sensor->gpio_power)) {
+												 GPIOD_OUT_LOW);
+	if (IS_ERR(sensor->gpio_power))
+	{
 		ret = dev_err_probe(dev, PTR_ERR(sensor->gpio_power),
-				    "failed to get power GPIO\n");
+							"failed to get power GPIO\n");
 		return ret;
 	}
 
 	/* Power on and check chip ID */
 	ret = imx708_hw_power_up(dev);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to power on sensor: %d\n", ret);
 		return ret;
 	}
@@ -881,9 +933,10 @@ static int imx708_probe(struct i2c_client *client)
 
 	/* Allocate the per-instance index used for /dev, sysfs and debugfs */
 	ret = ida_alloc_max(&imx708_ida, IMX708_MAX_DEVICES - 1, GFP_KERNEL);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		dev_err(dev, "no free device instance (max %d): %d\n",
-			IMX708_MAX_DEVICES, ret);
+				IMX708_MAX_DEVICES, ret);
 		goto err_power_off;
 	}
 	sensor->chardev_id = (unsigned int)ret;
@@ -893,16 +946,17 @@ static int imx708_probe(struct i2c_client *client)
 	sensor->sd.internal_ops = &imx708_internal_ops;
 	sensor->sd.owner = THIS_MODULE;
 	sensor->sd.flags = V4L2_SUBDEV_FL_HAS_DEVNODE |
-			   V4L2_SUBDEV_FL_HAS_EVENTS;
+					   V4L2_SUBDEV_FL_HAS_EVENTS;
 	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	sensor->sd.dev = dev;
 
 	snprintf(sensor->sd.name, sizeof(sensor->sd.name), "%s %s",
-		 DRV_NAME, dev_name(dev));
+			 DRV_NAME, dev_name(dev));
 
 	/* Initialize controls */
 	ret = imx708_init_controls(sensor);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to init controls: %d\n", ret);
 		goto err_free_ida;
 	}
@@ -910,7 +964,8 @@ static int imx708_probe(struct i2c_client *client)
 	/* Create media pad */
 	sensor->pad.flags = MEDIA_PAD_FL_SOURCE;
 	ret = media_entity_pads_init(&sensor->sd.entity, 1, &sensor->pad);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to init media pads: %d\n", ret);
 		goto err_free_ctrl;
 	}
@@ -930,14 +985,16 @@ static int imx708_probe(struct i2c_client *client)
 	 * and the ioctl status path stay valid.
 	 */
 	ret = imx708_irq_init(sensor);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to init interrupts: %d\n", ret);
 		goto err_media_cleanup;
 	}
 
 	/* Register sub-device */
 	ret = v4l2_async_register_subdev_sensor(&sensor->sd);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to register subdev: %d\n", ret);
 		goto err_media_cleanup;
 	}
@@ -948,7 +1005,8 @@ static int imx708_probe(struct i2c_client *client)
 	 * way to reach the sensor at all.
 	 */
 	ret = imx708_chardev_register(sensor, sensor->chardev_id);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to register char device: %d\n", ret);
 		goto err_unregister_subdev;
 	}
@@ -962,14 +1020,15 @@ static int imx708_probe(struct i2c_client *client)
 	 * drop the supplies once probe settles.
 	 */
 	ret = imx708_pm_init(sensor);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to enable runtime PM: %d\n", ret);
 		goto err_unregister_chardev;
 	}
 
 	trace_imx708_probe(sensor->soc->name, client->addr);
 	dev_info(dev, "%s probed as /dev/%s%u\n", sensor->soc->name,
-		 DRV_NAME, sensor->chardev_id);
+			 DRV_NAME, sensor->chardev_id);
 
 	return 0;
 
@@ -1025,31 +1084,29 @@ static const struct of_device_id imx708_of_match[] = {
 		.compatible = "sony,imx708-wide",
 		.data = &imx708_soc_rpi_wide,
 	},
-	{ /* sentinel */ }
-};
+	{/* sentinel */}};
 MODULE_DEVICE_TABLE(of, imx708_of_match);
 
 static const struct i2c_device_id imx708_id[] = {
-	{ "imx708", (kernel_ulong_t)&imx708_soc_rpi },
-	{ "imx708-wide", (kernel_ulong_t)&imx708_soc_rpi_wide },
-	{ }
-};
+	{"imx708", (kernel_ulong_t)&imx708_soc_rpi},
+	{"imx708-wide", (kernel_ulong_t)&imx708_soc_rpi_wide},
+	{}};
 MODULE_DEVICE_TABLE(i2c, imx708_id);
 
 static struct i2c_driver imx708_i2c_driver = {
 	.driver = {
-		.name		= DRV_NAME,
-		.of_match_table	= imx708_of_match,
-		.pm		= &imx708_pm_ops,
+		.name = DRV_NAME,
+		.of_match_table = imx708_of_match,
+		.pm = &imx708_pm_ops,
 		/*
 		 * Attaches the attributes from imx708_sysfs.c. Without this
 		 * the documented sysfs ABI is never created.
 		 */
-		.dev_groups	= imx708_attr_groups,
+		.dev_groups = imx708_attr_groups,
 	},
-	.probe		= imx708_probe,
-	.remove		= imx708_remove,
-	.id_table	= imx708_id,
+	.probe = imx708_probe,
+	.remove = imx708_remove,
+	.id_table = imx708_id,
 };
 
 /* ------------------------------------------------------------------ */
@@ -1062,8 +1119,9 @@ static int __init imx708_module_init(void)
 
 	/* Register char device region for /dev/imx708* */
 	ret = alloc_chrdev_region(&imx708_devt, 0, IMX708_MAX_DEVICES,
-				  DRV_NAME);
-	if (ret) {
+							  DRV_NAME);
+	if (ret)
+	{
 		pr_err("imx708: failed to alloc chrdev region: %d\n", ret);
 		return ret;
 	}
@@ -1074,7 +1132,8 @@ static int __init imx708_module_init(void)
 #else
 	imx708_class = class_create(THIS_MODULE, DRV_NAME);
 #endif
-	if (IS_ERR(imx708_class)) {
+	if (IS_ERR(imx708_class))
+	{
 		ret = PTR_ERR(imx708_class);
 		pr_err("imx708: failed to create class: %d\n", ret);
 		unregister_chrdev_region(imx708_devt, IMX708_MAX_DEVICES);
@@ -1087,7 +1146,8 @@ static int __init imx708_module_init(void)
 		pr_warn("imx708: debugfs unavailable: %d\n", ret);
 
 	ret = i2c_add_driver(&imx708_i2c_driver);
-	if (ret) {
+	if (ret)
+	{
 		pr_err("imx708: failed to add i2c driver: %d\n", ret);
 		imx708_debugfs_exit();
 		class_destroy(imx708_class);

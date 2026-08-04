@@ -39,7 +39,7 @@
 #include "imx708_regs.h"
 
 /* Idle this long before dropping the supplies. */
-#define IMX708_AUTOSUSPEND_DELAY_MS	1000
+#define IMX708_AUTOSUSPEND_DELAY_MS 1000
 
 /* ------------------------------------------------------------------ */
 /* Runtime PM handlers                                                 */
@@ -72,9 +72,11 @@ int imx708_runtime_resume(struct device *dev)
 		return ret;
 
 	/* Re-apply the mode; the sensor came up with register defaults. */
-	if (sensor->mode) {
+	if (sensor->mode)
+	{
 		ret = sensor->soc->ops->set_mode(sensor, &sensor->fmt);
-		if (ret) {
+		if (ret)
+		{
 			dev_err(dev, "failed to restore mode: %d\n", ret);
 			goto err_power_down;
 		}
@@ -85,13 +87,15 @@ int imx708_runtime_resume(struct device *dev)
 	 * gain and the test pattern without a separate register save list.
 	 */
 	ret = v4l2_ctrl_handler_setup(&sensor->ctrl_handler);
-	if (ret) {
+	if (ret)
+	{
 		dev_err(dev, "failed to restore controls: %d\n", ret);
 		goto err_power_down;
 	}
 
 	/* Restore HDR configuration if it was enabled. */
-	if (sensor->hdr_enabled && sensor->soc->ops->set_hdr) {
+	if (sensor->hdr_enabled && sensor->soc->ops->set_hdr)
+	{
 		ret = sensor->soc->ops->set_hdr(sensor, 1, sensor->hdr_ratio);
 		if (ret)
 			dev_warn(dev, "failed to restore HDR mode: %d\n", ret);
@@ -135,9 +139,11 @@ int imx708_resume(struct device *dev)
 		return ret;
 
 	mutex_lock(&sensor->lock);
-	if (sensor->streaming) {
+	if (sensor->streaming)
+	{
 		ret = sensor->soc->ops->power_on(sensor);
-		if (ret) {
+		if (ret)
+		{
 			dev_err(dev, "failed to restart streaming: %d\n", ret);
 			sensor->streaming = false;
 		}
@@ -180,7 +186,8 @@ int imx708_pm_init(struct imx708_dev *sensor)
 	pm_runtime_enable(dev);
 
 	ret = devm_add_action_or_reset(dev, imx708_pm_disable, dev);
-	if (ret) {
+	if (ret)
+	{
 		pm_runtime_put_noidle(dev);
 		return ret;
 	}

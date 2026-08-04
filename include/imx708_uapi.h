@@ -27,7 +27,7 @@
  * Chosen to avoid collision with other media drivers. The V4L2 subsystem
  * uses 'V' (0x56). We use 'I' (0x49) for IMX708-specific extensions.
  */
-#define IMX708_IOC_MAGIC	0x49
+#define IMX708_IOC_MAGIC 0x49
 
 /*
  * IOCTL numbers and their structs
@@ -47,7 +47,8 @@
  * @bit_depth:    Bits per pixel
  * @__pad:        Padding to 64-bit alignment
  */
-struct imx708_mode_info {
+struct imx708_mode_info
+{
 	__u32 width;
 	__u32 height;
 	__u32 code;
@@ -67,13 +68,14 @@ struct imx708_mode_info {
  * @error:        Error flag
  * @__pad:        Padding to 64-bit alignment
  */
-struct imx708_sensor_status {
+struct imx708_sensor_status
+{
 	__s32 temperature;
 	__u32 frame_count;
-	__u8  pll_locked;
-	__u8  streaming;
-	__u8  error;
-	__u8  __pad[5];
+	__u8 pll_locked;
+	__u8 streaming;
+	__u8 error;
+	__u8 __pad[5];
 };
 
 /**
@@ -85,7 +87,8 @@ struct imx708_sensor_status {
  * @analog_gain_gb:  Green-B channel analog gain (0 = auto)
  * @analog_gain_b:   Blue channel analog gain (0 = auto)
  */
-struct imx708_gain_config {
+struct imx708_gain_config
+{
 	__u32 analog_gain;
 	__u32 digital_gain;
 	__u32 analog_gain_r;
@@ -102,7 +105,8 @@ struct imx708_gain_config {
  * @exposure_gb:  Green-B channel exposure (0 = same)
  * @exposure_b:   Blue channel exposure (0 = same)
  */
-struct imx708_exposure_config {
+struct imx708_exposure_config
+{
 	__u32 exposure;
 	__u32 exposure_r;
 	__u32 exposure_gr;
@@ -120,7 +124,8 @@ struct imx708_exposure_config {
  * DOL HDR is not supported; IMX708_SET_HDR returns -EINVAL for mode > 1.
  * HDR cannot be reconfigured while streaming (-EBUSY).
  */
-struct imx708_hdr_config {
+struct imx708_hdr_config
+{
 	__u32 mode;
 	__u32 ratio;
 	__u32 exposure_s;
@@ -133,7 +138,8 @@ struct imx708_hdr_config {
  * @color:        Solid color value (when pattern=2)
  * @brightness:   Pattern brightness (0-255)
  */
-struct imx708_test_pattern_config {
+struct imx708_test_pattern_config
+{
 	__u32 pattern;
 	__u32 color;
 	__u32 brightness;
@@ -149,64 +155,65 @@ struct imx708_test_pattern_config {
  */
 
 /* Query number of available sensor modes */
-#define IMX708_GET_NUM_MODES	_IOR(IMX708_IOC_MAGIC, 1, __u32)
+#define IMX708_GET_NUM_MODES _IOR(IMX708_IOC_MAGIC, 1, __u32)
 
 /* Get mode info for a given index (index in argp) */
-#define IMX708_GET_MODE_INFO	_IOWR(IMX708_IOC_MAGIC, 2, struct imx708_mode_info)
+#define IMX708_GET_MODE_INFO _IOWR(IMX708_IOC_MAGIC, 2, struct imx708_mode_info)
 
 /* Get live sensor status */
-#define IMX708_GET_STATUS	_IOR(IMX708_IOC_MAGIC, 3, struct imx708_sensor_status)
+#define IMX708_GET_STATUS _IOR(IMX708_IOC_MAGIC, 3, struct imx708_sensor_status)
 
 /* Set gain (analog + digital, per-channel) */
-#define IMX708_SET_GAIN		_IOW(IMX708_IOC_MAGIC, 4, struct imx708_gain_config)
+#define IMX708_SET_GAIN _IOW(IMX708_IOC_MAGIC, 4, struct imx708_gain_config)
 
 /* Get current gain settings */
-#define IMX708_GET_GAIN		_IOR(IMX708_IOC_MAGIC, 5, struct imx708_gain_config)
+#define IMX708_GET_GAIN _IOR(IMX708_IOC_MAGIC, 5, struct imx708_gain_config)
 
 /* Set exposure time */
-#define IMX708_SET_EXPOSURE	_IOW(IMX708_IOC_MAGIC, 6, struct imx708_exposure_config)
+#define IMX708_SET_EXPOSURE _IOW(IMX708_IOC_MAGIC, 6, struct imx708_exposure_config)
 
 /* Get current exposure settings */
-#define IMX708_GET_EXPOSURE	_IOR(IMX708_IOC_MAGIC, 7, struct imx708_exposure_config)
+#define IMX708_GET_EXPOSURE _IOR(IMX708_IOC_MAGIC, 7, struct imx708_exposure_config)
 
 /* Set HDR mode */
-#define IMX708_SET_HDR		_IOW(IMX708_IOC_MAGIC, 8, struct imx708_hdr_config)
+#define IMX708_SET_HDR _IOW(IMX708_IOC_MAGIC, 8, struct imx708_hdr_config)
 
 /* Get current HDR configuration */
-#define IMX708_GET_HDR		_IOR(IMX708_IOC_MAGIC, 9, struct imx708_hdr_config)
+#define IMX708_GET_HDR _IOR(IMX708_IOC_MAGIC, 9, struct imx708_hdr_config)
 
 /* Set test pattern */
-#define IMX708_SET_TEST_PATTERN	_IOW(IMX708_IOC_MAGIC, 10, struct imx708_test_pattern_config)
+#define IMX708_SET_TEST_PATTERN _IOW(IMX708_IOC_MAGIC, 10, struct imx708_test_pattern_config)
 
 /* Get current test pattern */
-#define IMX708_GET_TEST_PATTERN	_IOR(IMX708_IOC_MAGIC, 11, struct imx708_test_pattern_config)
+#define IMX708_GET_TEST_PATTERN _IOR(IMX708_IOC_MAGIC, 11, struct imx708_test_pattern_config)
 
 /* Start streaming */
-#define IMX708_START_STREAM	_IO(IMX708_IOC_MAGIC, 12)
+#define IMX708_START_STREAM _IO(IMX708_IOC_MAGIC, 12)
 
 /* Stop streaming */
-#define IMX708_STOP_STREAM	_IO(IMX708_IOC_MAGIC, 13)
+#define IMX708_STOP_STREAM _IO(IMX708_IOC_MAGIC, 13)
 
 /* Software reset the sensor */
-#define IMX708_SOFT_RESET	_IO(IMX708_IOC_MAGIC, 14)
+#define IMX708_SOFT_RESET _IO(IMX708_IOC_MAGIC, 14)
 
 /* Read raw register (debug, requires CAP_SYS_ADMIN) */
-#define IMX708_READ_REG		_IOWR(IMX708_IOC_MAGIC, 15, struct imx708_reg_access)
+#define IMX708_READ_REG _IOWR(IMX708_IOC_MAGIC, 15, struct imx708_reg_access)
 
 /* Write raw register (debug, requires CAP_SYS_ADMIN) */
-#define IMX708_WRITE_REG	_IOW(IMX708_IOC_MAGIC, 16, struct imx708_reg_access)
+#define IMX708_WRITE_REG _IOW(IMX708_IOC_MAGIC, 16, struct imx708_reg_access)
 
 /**
  * struct imx708_reg_access - Raw register read/write (debug only)
  * @reg:          Register address
  * @val:          Register value (read returns, write sets)
  */
-struct imx708_reg_access {
+struct imx708_reg_access
+{
 	__u32 reg;
 	__u32 val;
 };
 
 /* Maximum number of ioctls */
-#define IMX708_IOC_MAXNR		16
+#define IMX708_IOC_MAXNR 16
 
 #endif /* _IMX708_UAPI_H_ */

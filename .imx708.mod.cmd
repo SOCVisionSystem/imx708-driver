@@ -1,0 +1,1 @@
+savedcmd_imx708.mod := printf '%s\n'   src/imx708_main.o src/imx708_platform.o src/imx708_chardev.o src/imx708_sysfs.o src/imx708_debugfs.o src/imx708_irq.o src/imx708_pm.o src/imx708_trace.o | awk '!x[$$0]++ { print("./"$$0) }' > imx708.mod

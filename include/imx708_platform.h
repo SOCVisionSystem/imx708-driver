@@ -56,19 +56,20 @@ struct imx708_error_counters;
  * calls only through these pointers, so adding a new SoC is a new ops table
  * plus one entry in the match table — never a change to the core.
  */
-struct imx708_hw_ops {
-	int  (*init)(struct imx708_dev *sensor);
+struct imx708_hw_ops
+{
+	int (*init)(struct imx708_dev *sensor);
 	void (*deinit)(struct imx708_dev *sensor);
-	int  (*power_on)(struct imx708_dev *sensor);
-	int  (*power_off)(struct imx708_dev *sensor);
-	int  (*set_mode)(struct imx708_dev *sensor,
-			 const struct v4l2_mbus_framefmt *fmt);
-	int  (*set_gain)(struct imx708_dev *sensor, u32 gain);
-	int  (*set_exposure)(struct imx708_dev *sensor, u32 exposure);
-	int  (*set_digital_gain)(struct imx708_dev *sensor, u32 dgain);
-	int  (*set_hdr)(struct imx708_dev *sensor, u32 mode, u32 ratio);
-	u32  (*irq_ack)(struct imx708_dev *sensor);
-	int  (*quirk_fixup)(struct imx708_dev *sensor);
+	int (*power_on)(struct imx708_dev *sensor);
+	int (*power_off)(struct imx708_dev *sensor);
+	int (*set_mode)(struct imx708_dev *sensor,
+					const struct v4l2_mbus_framefmt *fmt);
+	int (*set_gain)(struct imx708_dev *sensor, u32 gain);
+	int (*set_exposure)(struct imx708_dev *sensor, u32 exposure);
+	int (*set_digital_gain)(struct imx708_dev *sensor, u32 dgain);
+	int (*set_hdr)(struct imx708_dev *sensor, u32 mode, u32 ratio);
+	u32 (*irq_ack)(struct imx708_dev *sensor);
+	int (*quirk_fixup)(struct imx708_dev *sensor);
 };
 
 /**
@@ -87,7 +88,8 @@ struct imx708_hw_ops {
  * Each mode is a complete register configuration that puts the sensor into
  * a known resolution, format, and frame rate.
  */
-struct imx708_mode {
+struct imx708_mode
+{
 	unsigned int width;
 	unsigned int height;
 	u32 code;
@@ -114,18 +116,19 @@ struct imx708_mode {
  * @i2c_addr:      I2C slave address
  * @quirks:        Bitmask of IMX708_QUIRK_* flags
  */
-struct imx708_soc_data {
-	const char			*name;
-	const struct imx708_hw_ops	*ops;
-	const struct regmap_config	*regmap_cfg;
-	const struct imx708_regs	*reg;
-	const struct imx708_mode	*modes;
-	unsigned int			num_modes;
-	unsigned int			num_channels;
-	const char * const		*clk_names;
-	const char * const		*gpio_names;
-	unsigned short			i2c_addr;
-	u32				quirks;
+struct imx708_soc_data
+{
+	const char *name;
+	const struct imx708_hw_ops *ops;
+	const struct regmap_config *regmap_cfg;
+	const struct imx708_regs *reg;
+	const struct imx708_mode *modes;
+	unsigned int num_modes;
+	unsigned int num_channels;
+	const char *const *clk_names;
+	const char *const *gpio_names;
+	unsigned short i2c_addr;
+	u32 quirks;
 };
 
 /**
@@ -155,73 +158,74 @@ struct imx708_soc_data {
  * container_of() or dev_get_drvdata(). No file-scope globals for per-device
  * state.
  */
-struct imx708_dev {
-	struct v4l2_subdev		sd;
-	struct media_pad		pad;
-	struct v4l2_ctrl_handler	ctrl_handler;
-	struct device			*dev;
-	struct i2c_client		*client;
-	struct regmap			*regmap;
-	const struct imx708_soc_data	*soc;
+struct imx708_dev
+{
+	struct v4l2_subdev sd;
+	struct media_pad pad;
+	struct v4l2_ctrl_handler ctrl_handler;
+	struct device *dev;
+	struct i2c_client *client;
+	struct regmap *regmap;
+	const struct imx708_soc_data *soc;
 
-	struct mutex			lock;	/* protects sensor state */
+	struct mutex lock; /* protects sensor state */
 
-	struct v4l2_mbus_framefmt	fmt;
-	const struct imx708_mode	*mode;
-	bool				streaming;
-	int				power_count;
-	bool				hdr_enabled;
-	u32				hdr_ratio;
+	struct v4l2_mbus_framefmt fmt;
+	const struct imx708_mode *mode;
+	bool streaming;
+	int power_count;
+	bool hdr_enabled;
+	u32 hdr_ratio;
 
 	/* Interrupt handling; written from hardirq context */
-	atomic_t			pending_events;
+	atomic_t pending_events;
 
 	/* V4L2 control state */
-	u32				test_pattern;
-	bool				hflip;
-	bool				vflip;
-	int				brightness;
-	int				contrast;
-	int				saturation;
-	int				hue;
-	int				gamma;
-	int				sharpness;
-	bool				auto_wb;
-	int				wb_temp;
-	int				backlight_comp;
-	int				power_line_freq;
-	int				exp_bias;
-	u32				a3a_lock;
-	int				scene_mode;
-	int				iso;
-	int				iso_auto;
-	int				colorfx;
-	int				zoom;
-	int				pan;
-	int				tilt;
+	u32 test_pattern;
+	bool hflip;
+	bool vflip;
+	int brightness;
+	int contrast;
+	int saturation;
+	int hue;
+	int gamma;
+	int sharpness;
+	bool auto_wb;
+	int wb_temp;
+	int backlight_comp;
+	int power_line_freq;
+	int exp_bias;
+	u32 a3a_lock;
+	int scene_mode;
+	int iso;
+	int iso_auto;
+	int colorfx;
+	int zoom;
+	int pan;
+	int tilt;
 
 	/* Regulator supplies */
-	struct regulator		*reg_dovdd;	/* vana1 (2.8V analog) */
-	struct regulator		*reg_avdd;	/* vana2 (1.8V analog) */
-	struct regulator		*reg_dvdd;	/* vdig (1.1V digital core) */
-	struct regulator		*reg_vddl;	/* vddl (1.8V I/O, optional) */
+	struct regulator *reg_dovdd; /* vana1 (2.8V analog) */
+	struct regulator *reg_avdd;	 /* vana2 (1.8V analog) */
+	struct regulator *reg_dvdd;	 /* vdig (1.1V digital core) */
+	struct regulator *reg_vddl;	 /* vddl (1.8V I/O, optional) */
 
 	/* GPIOs */
-	struct gpio_desc		*gpio_reset;
-	struct gpio_desc		*gpio_power;
+	struct gpio_desc *gpio_reset;
+	struct gpio_desc *gpio_power;
 
 #ifdef CONFIG_IMX708_FAULT_INJECT
-	struct imx708_fault_state	*fault;
+	struct imx708_fault_state *fault;
 #endif
-	struct cdev			cdev;
-	unsigned int			chardev_id;
-	struct imx708_irq_counters	*irq_counters;
-	struct imx708_error_counters	*error_counters;
-	struct dentry			*debugfs_dir;
+	struct cdev cdev;
+	unsigned int chardev_id;
+	struct imx708_irq_counters *irq_counters;
+	struct imx708_error_counters *error_counters;
+	struct dentry *debugfs_dir;
 };
 
 /* Helper to get imx708_dev from v4l2_subdev */
-#define to_imx708_dev(sd)	container_of(sd, struct imx708_dev, sd)
+#define to_imx708_dev(sd) container_of(sd, struct imx708_dev, sd)
 
 /**
  * struct imx708_config - Sensor configuration (for set_config ioctl)
@@ -232,7 +236,8 @@ struct imx708_dev {
  * @test_pattern:  Test pattern selection (0=off)
  * @binning:       Binning mode (1=no binning, 2=2x2, etc.)
  */
-struct imx708_config {
+struct imx708_config
+{
 	u32 gain;
 	u32 digital_gain;
 	u32 exposure;
@@ -242,15 +247,16 @@ struct imx708_config {
 };
 
 /* Quirk flags */
-#define IMX708_QUIRK_REVERSE_CLOCK	BIT(0)
-#define IMX708_QUIRK_NO_POWER_GPIO	BIT(1)
-#define IMX708_QUIRK_FLIP_MIPI		BIT(2)
+#define IMX708_QUIRK_REVERSE_CLOCK BIT(0)
+#define IMX708_QUIRK_NO_POWER_GPIO BIT(1)
+#define IMX708_QUIRK_FLIP_MIPI BIT(2)
 
 /* Register map unverified sentinel */
-#define IMX708_REG_UNVERIFIED		0xFFFFFFFFU
+#define IMX708_REG_UNVERIFIED 0xFFFFFFFFU
 
 /* Interrupt counters */
-struct imx708_irq_counters {
+struct imx708_irq_counters
+{
 	atomic_t frame_start;
 	atomic_t frame_end;
 	atomic_t fifo_overflow;
@@ -262,7 +268,8 @@ struct imx708_irq_counters {
 };
 
 /* Error counters */
-struct imx708_error_counters {
+struct imx708_error_counters
+{
 	atomic_t i2c_error;
 	atomic_t timeout;
 	atomic_t invalid_mode;

@@ -10,32 +10,81 @@
  * One value per file, human-readable, documented units. All attributes are
  * attached via .dev_groups on the driver so creation and removal are race-free.
  *
- * Locking: All show/store handlers take sensor->lock.
- */
+ * Locking:
+ *   All show/store handlers take sensor->lock around sensor state and
+ *   register access.
+ *
+ * Power:
+ *   The sensor is runtime-suspended (supplies off) whenever nothing is
+ *   streaming, and I2C transfers to an unpowered sensor fail. Every handler
+ *   that touches hardware therefore takes a runtime-PM reference first via
+ *   the imx708_sysfs_read*/
+	imx708_sysfs_write helpers below.Attributes
+		*that only report driver state do not.
+			* /
 
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/stat.h>
 #include <linux/kernel.h>
+#include <linux/pm_runtime.h>
+#include <linux/regmap.h>
 
 #include "imx708_platform.h"
 #include "imx708_regs.h"
+
+	/* ------------------------------------------------------------------ */
+	/* Power-managed register access helpers                               */
+	/* ------------------------------------------------------------------ */
+
+	static int imx708_sysfs_read8(struct imx708_dev *sensor, u32 reg, u32 *val)
+{
+	int ret;
+
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
+	mutex_lock(&sensor->lock);
+	ret = regmap_read(sensor->regmap, reg, val);
+	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
+
+	return ret;
+}
+
+static int imx708_sysfs_read16(struct imx708_dev *sensor, u32 reg, u32 *val)
+{
+	int ret;
+
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
+	mutex_lock(&sensor->lock);
+	ret = imx708_read_reg16(sensor, reg, val);
+	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
+
+	return ret;
+}
 
 /* ------------------------------------------------------------------ */
 /* Attribute show/store functions                                      */
 /* ------------------------------------------------------------------ */
 
 static ssize_t chip_id_show(struct device *dev,
-			     struct device_attribute *attr, char *buf)
+							struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 chip_id;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_CHIP_ID, &chip_id);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_CHIP_ID, &chip_id);
 	if (ret)
 		return ret;
 
@@ -44,16 +93,13 @@ static ssize_t chip_id_show(struct device *dev,
 static DEVICE_ATTR_RO(chip_id);
 
 static ssize_t chip_version_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+								 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 version;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_MODULE_ID, &version);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_MODULE_ID, &version);
 	if (ret)
 		return ret;
 
@@ -62,16 +108,13 @@ static ssize_t chip_version_show(struct device *dev,
 static DEVICE_ATTR_RO(chip_version);
 
 static ssize_t temperature_show(struct device *dev,
-				 struct device_attribute *attr, char *buf)
+								struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 temp;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_TEMPERATURE, &temp);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read8(sensor, IMX708_REG_TEMPERATURE, &temp);
 	if (ret)
 		return ret;
 
@@ -81,7 +124,7 @@ static ssize_t temperature_show(struct device *dev,
 static DEVICE_ATTR_RO(temperature);
 
 static ssize_t streaming_show(struct device *dev,
-			       struct device_attribute *attr, char *buf)
+							  struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	bool streaming;
@@ -94,8 +137,8 @@ static ssize_t streaming_show(struct device *dev,
 }
 
 static ssize_t streaming_store(struct device *dev,
-				struct device_attribute *attr,
-				const char *buf, size_t count)
+							   struct device_attribute *attr,
+							   const char *buf, size_t count)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	bool enable;
@@ -105,15 +148,50 @@ static ssize_t streaming_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	mutex_lock(&sensor->lock);
-	if (enable && !sensor->streaming) {
-		ret = sensor->soc->ops->power_on(sensor);
-		if (!ret)
-			sensor->streaming = true;
-	} else if (!enable && sensor->streaming) {
-		sensor->soc->ops->power_off(sensor);
-		sensor->streaming = false;
+	/*
+	 * Take the runtime-PM reference before sensor->lock: the resume
+	 * callback re-applies the mode and control values and would deadlock
+	 * against this mutex otherwise. The reference is held for as long as
+	 * the stream is running.
+	 */
+	if (enable)
+	{
+		ret = pm_runtime_resume_and_get(sensor->dev);
+		if (ret < 0)
+			return ret;
 	}
+
+	mutex_lock(&sensor->lock);
+
+	if (enable == sensor->streaming)
+	{
+		mutex_unlock(&sensor->lock);
+		if (enable)
+			pm_runtime_put(sensor->dev);
+		return count;
+	}
+
+	if (enable)
+	{
+		ret = sensor->soc->ops->set_mode(sensor, &sensor->fmt);
+		if (!ret)
+			ret = sensor->soc->ops->power_on(sensor);
+		if (ret)
+		{
+			mutex_unlock(&sensor->lock);
+			pm_runtime_put(sensor->dev);
+			return ret;
+		}
+		sensor->streaming = true;
+	}
+	else
+	{
+		ret = sensor->soc->ops->power_off(sensor);
+		sensor->streaming = false;
+		pm_runtime_mark_last_busy(sensor->dev);
+		pm_runtime_put_autosuspend(sensor->dev);
+	}
+
 	mutex_unlock(&sensor->lock);
 
 	return ret ? ret : count;
@@ -121,35 +199,33 @@ static ssize_t streaming_store(struct device *dev,
 static DEVICE_ATTR_RW(streaming);
 
 static ssize_t mode_show(struct device *dev,
-			  struct device_attribute *attr, char *buf)
+						 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	const struct imx708_mode *mode;
+	int len;
 
 	mutex_lock(&sensor->lock);
 	mode = sensor->mode;
 	if (mode)
-		sysfs_emit(buf, "%ux%u @ %u fps\n",
-			   mode->width, mode->height, mode->fps);
+		len = sysfs_emit(buf, "%ux%u @ %u fps\n",
+						 mode->width, mode->height, mode->fps);
 	else
-		sysfs_emit(buf, "none\n");
+		len = sysfs_emit(buf, "none\n");
 	mutex_unlock(&sensor->lock);
 
-	return 0;
+	return len;
 }
 static DEVICE_ATTR_RO(mode);
 
 static ssize_t gain_show(struct device *dev,
-			   struct device_attribute *attr, char *buf)
+						 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 gain;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_ANALOG_GAIN, &gain);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_ANALOG_GAIN, &gain);
 	if (ret)
 		return ret;
 
@@ -157,8 +233,8 @@ static ssize_t gain_show(struct device *dev,
 }
 
 static ssize_t gain_store(struct device *dev,
-			   struct device_attribute *attr,
-			   const char *buf, size_t count)
+						  struct device_attribute *attr,
+						  const char *buf, size_t count)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 gain;
@@ -168,25 +244,32 @@ static ssize_t gain_store(struct device *dev,
 	if (ret)
 		return ret;
 
+	if (gain > IMX708_ANA_GAIN_MAX)
+		return -EINVAL;
+
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
 	mutex_lock(&sensor->lock);
 	ret = sensor->soc->ops->set_gain(sensor, gain);
 	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
 
 	return ret ? ret : count;
 }
 static DEVICE_ATTR_RW(gain);
 
 static ssize_t exposure_show(struct device *dev,
-			      struct device_attribute *attr, char *buf)
+							 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 exposure;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_EXPOSURE, &exposure);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_EXPOSURE, &exposure);
 	if (ret)
 		return ret;
 
@@ -194,8 +277,8 @@ static ssize_t exposure_show(struct device *dev,
 }
 
 static ssize_t exposure_store(struct device *dev,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
+							  struct device_attribute *attr,
+							  const char *buf, size_t count)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 exposure;
@@ -205,25 +288,32 @@ static ssize_t exposure_store(struct device *dev,
 	if (ret)
 		return ret;
 
+	if (exposure < IMX708_EXPOSURE_MIN || exposure > IMX708_EXPOSURE_MAX)
+		return -EINVAL;
+
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
 	mutex_lock(&sensor->lock);
 	ret = sensor->soc->ops->set_exposure(sensor, exposure);
 	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
 
 	return ret ? ret : count;
 }
 static DEVICE_ATTR_RW(exposure);
 
 static ssize_t test_pattern_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+								 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 pattern;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_TEST_PATTERN, &pattern);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_TEST_PATTERN, &pattern);
 	if (ret)
 		return ret;
 
@@ -231,8 +321,8 @@ static ssize_t test_pattern_show(struct device *dev,
 }
 
 static ssize_t test_pattern_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t count)
+								  struct device_attribute *attr,
+								  const char *buf, size_t count)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 pattern;
@@ -242,71 +332,77 @@ static ssize_t test_pattern_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	if (pattern > 4)
+	if (pattern > IMX708_TEST_PATTERN_MAX)
 		return -EINVAL;
 
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
+
 	mutex_lock(&sensor->lock);
-	ret = regmap_write(sensor->regmap, IMX708_REG_TEST_PATTERN, pattern);
+	ret = imx708_write_reg16(sensor, IMX708_REG_TEST_PATTERN, pattern);
+	if (!ret)
+		sensor->test_pattern = pattern;
 	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
 
 	return ret ? ret : count;
 }
 static DEVICE_ATTR_RW(test_pattern);
 
 static ssize_t pll_locked_show(struct device *dev,
-				struct device_attribute *attr, char *buf)
+							   struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 status;
 	int ret;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap, IMX708_REG_STATUS, &status);
-	mutex_unlock(&sensor->lock);
-
+	ret = imx708_sysfs_read16(sensor, IMX708_REG_STATUS, &status);
 	if (ret)
 		return ret;
 
 	return sysfs_emit(buf, "%d\n",
-			  !!(status & IMX708_STATUS_PLL_LOCKED));
+					  !!(status & IMX708_STATUS_PLL_LOCKED));
 }
 static DEVICE_ATTR_RO(pll_locked);
 
+/*
+ * The IMX708 has no host-readable frame counter. Report the count the
+ * driver maintains from the frame-end interrupt (0 on boards without an
+ * interrupt line) rather than the FRAME_LENGTH timing register, which is
+ * a completely different quantity.
+ */
 static ssize_t frame_count_show(struct device *dev,
-				 struct device_attribute *attr, char *buf)
+								struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
-	u32 frame_count;
-	int ret;
+	unsigned int count = 0;
 
-	mutex_lock(&sensor->lock);
-	ret = regmap_read(sensor->regmap,
-			  IMX708_REG_FRAME_LENGTH, &frame_count);
-	mutex_unlock(&sensor->lock);
+	if (sensor->irq_counters)
+		count = (unsigned int)atomic_read(&sensor->irq_counters->frame_end);
 
-	if (ret)
-		return ret;
-
-	return sysfs_emit(buf, "%u\n", frame_count);
+	return sysfs_emit(buf, "%u\n", count);
 }
 static DEVICE_ATTR_RO(frame_count);
 
 static ssize_t hdr_mode_show(struct device *dev,
-			      struct device_attribute *attr, char *buf)
+							 struct device_attribute *attr, char *buf)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
-	u32 hdr = 0;
+	u32 hdr;
 
 	mutex_lock(&sensor->lock);
-	/* TODO(HW): Read actual HDR mode register */
+	hdr = sensor->hdr_enabled ? 1 : 0;
 	mutex_unlock(&sensor->lock);
 
 	return sysfs_emit(buf, "%u\n", hdr);
 }
 
 static ssize_t hdr_mode_store(struct device *dev,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
+							  struct device_attribute *attr,
+							  const char *buf, size_t count)
 {
 	struct imx708_dev *sensor = dev_get_drvdata(dev);
 	u32 mode;
@@ -316,13 +412,26 @@ static ssize_t hdr_mode_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	if (mode > 2)
+	if (mode > IMX708_HDR_MODE_MAX)
 		return -EINVAL;
 
-	/* TODO(HW): Implement HDR mode switching */
-	dev_dbg(sensor->dev, "HDR mode %u (not yet implemented)\n", mode);
+	ret = pm_runtime_resume_and_get(sensor->dev);
+	if (ret < 0)
+		return ret;
 
-	return count;
+	mutex_lock(&sensor->lock);
+	/* The HDR table reprograms timing/binning; not safe while streaming. */
+	if (sensor->streaming)
+		ret = -EBUSY;
+	else
+		ret = sensor->soc->ops->set_hdr(sensor, mode,
+										IMX708_HDR_EXPOSURE_RATIO);
+	mutex_unlock(&sensor->lock);
+
+	pm_runtime_mark_last_busy(sensor->dev);
+	pm_runtime_put_autosuspend(sensor->dev);
+
+	return ret ? ret : count;
 }
 static DEVICE_ATTR_RW(hdr_mode);
 

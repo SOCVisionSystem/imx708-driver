@@ -29,6 +29,7 @@
 #include <linux/cdev.h>
 #include <linux/dcache.h>
 #include <linux/atomic.h>
+#include <linux/kref.h>
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -153,10 +154,14 @@ struct imx708_soc_data
  * @irq_counters:  Interrupt event counters
  * @error_counters: Error counters by type
  * @debugfs_dir:   Debugfs directory dentry
+ * @refcount:      Keeps the structure alive while a /dev node is open
+ * @removed:       Set once the I2C device has been unbound; every char
+ *                 device handler checks it before touching hardware
  *
- * Allocated with devm_kzalloc(), reachable from every entry point via
- * container_of() or dev_get_drvdata(). No file-scope globals for per-device
- * state.
+ * Allocated with kzalloc() and freed through @refcount, because an open
+ * file descriptor on /dev/imx708* can outlive driver unbind. Reachable from
+ * every entry point via container_of() or dev_get_drvdata(). No file-scope
+ * globals for per-device state.
  */
 struct imx708_dev
 {
@@ -169,6 +174,9 @@ struct imx708_dev
 	const struct imx708_soc_data *soc;
 
 	struct mutex lock; /* protects sensor state */
+
+	struct kref refcount;
+	bool removed;
 
 	struct v4l2_mbus_framefmt fmt;
 	const struct imx708_mode *mode;
@@ -288,6 +296,23 @@ struct imx708_error_counters
  */
 int imx708_read_reg16(struct imx708_dev *sensor, u32 reg, u32 *val);
 int imx708_write_reg16(struct imx708_dev *sensor, u32 reg, u32 val);
+
+/*
+ * Reference counting. imx708_dev_put() drops a reference and frees the
+ * structure when the last one goes away; an open /dev/imx708* file holds
+ * one, and the I2C driver holds one between probe and remove.
+ */
+void imx708_dev_release(struct kref *kref);
+
+static inline void imx708_dev_get(struct imx708_dev *sensor)
+{
+	kref_get(&sensor->refcount);
+}
+
+static inline void imx708_dev_put(struct imx708_dev *sensor)
+{
+	kref_put(&sensor->refcount, imx708_dev_release);
+}
 
 /* Char device functions */
 int imx708_chardev_register(struct imx708_dev *sensor, unsigned int id);
